@@ -1,0 +1,1 @@
+c:\users\user\appdata\local\programs\python\python310\scripts\streamlit run c:\JAFAR\STREAMLIT\Scdat_Project_2026\scdat_main_26.py
