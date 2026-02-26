@@ -2,6 +2,10 @@ import pandas as pd
 from pathlib import Path, PureWindowsPath
 import os
 from datetime import datetime
+from datetime import date
+from dateutil.relativedelta import relativedelta
+
+
 import calendar
 import plotly.graph_objects as go
 from dateutil.relativedelta import relativedelta
@@ -236,8 +240,16 @@ def container_dashboard(datafile_location):
 
 
 def monthly_container_loading(datafile_location):
-    current_year = datetime.today().year
-    start_date = pd.to_datetime(str(current_year) + '-01-01')
+    # today = date.today()
+    # start_date = (today.replace(day=1) - relativedelta(months=11))      # first_date_11_months_back
+    # start_date = pd.to_datetime(start_date)
+
+    # current_year = datetime.today().year
+    # start_date = pd.to_datetime(str(current_year) + '-01-01')
+    # start_date = pd.to_datetime(str(2025) + '-02-01')
+
+    # st.write(start_date)
+    # st.stop()
 
     df_ccs = data.ccs_df(datafile_location)
     df = df_ccs[['CONTAINER NO.', 'Loading Date']]
@@ -246,7 +258,7 @@ def monthly_container_loading(datafile_location):
 
     df['Loading Date'] = pd.to_datetime(df['Loading Date'])
 
-    df = df[df['Loading Date'] >= start_date]
+    # df = df[df['Loading Date'] >= start_date]
     df['Loading Date'] = df['Loading Date'].dt.to_period('M')
     df_monthly_group: object = df.groupby('Loading Date')['CONTAINER NO.'].count().to_frame().reset_index()
 
@@ -260,10 +272,17 @@ def monthly_container_loading(datafile_location):
 
     # add total line and color ++++++++++++++++
     index = len(df_monthly_group) + 1
+
+    start_date = str(date.today().year) + '- 01'
+    df_monthly_group = df_monthly_group[df_monthly_group['Loading Date'] >= start_date]     # container loaded from 1st January onwards
+
     total_container = df_monthly_group['CONTAINER NO.'].sum()
+
     df_monthly_group.loc[index] = ['Total', total_container, color_hex(10), color_hex(417)]  # add total, bg & font colors
 
     df_monthly_group['Loading Date'] = df_monthly_group['Loading Date'].astype(str)
+
+    # st.write(df_monthly_group)
 
     # ====================================================================
     fig = go.Figure(data=[go.Table(
@@ -285,12 +304,13 @@ def monthly_container_loading(datafile_location):
             align=['center', 'center']))
     ])
 
-    fig.update_layout(height=len(df_monthly_group) * 40 + 34, margin=dict(l=0, r=0, b=0, t=0))
+    fig.update_layout(height=len(df_monthly_group) * 36 + 34 + 7, margin=dict(l=0, r=0, b=0, t=0))
 
     return fig, total_container
 
 
 def sales_trend_graph(datafile_location, supplier, forecast_month):
+
     start = time.perf_counter()  # start runtime counter
 
     number_of_months_in_display = st.sidebar.number_input("MONTHS IN DISPLAY", min_value=6, max_value=24, value=13)
@@ -303,13 +323,24 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
     show_loading = st.sidebar.checkbox('SHOW LOADING', value=True)
     show_received = st.sidebar.checkbox('SHOW RECEIVED', value=True)
 
-    # get sales data ==================================================================================
-    values = data.sales_trend_df(datafile_location, supplier, model, number_of_months_in_display)
-    df_sales = values[0]
-    df_sales_all = values[1]
+    # get months list - start from previous month ============================
+    start = datetime.now() - relativedelta(months=1)
 
-    # st.write(df_sales)
-    # st.stop()
+    month_list = [
+        (start - relativedelta(months=i)).strftime("%b-%y")
+        for i in range(number_of_months_in_display)
+                 ]
+
+    # sort the months list by keeping the month order
+    month_list = sorted(
+        month_list,
+        key=lambda x: datetime.strptime(x, "%b-%y")
+                       )
+
+    # get sales data based on month_list ============================================
+    values = data.sales_trend_df(datafile_location, supplier, model, month_list)
+    df_sales = values[0]        # [ MONTH, SALES]
+    df_sales_all = values[1]    # [SKU, SUPPLIER, AMAZON, ODDO, TOTAL, MONTH]
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=df_sales['MONTH'],
@@ -319,14 +350,18 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
                              name="SALES",
                              ))
 
+    # st.plotly_chart(fig, use_container_width=True)
+    # st.stop()
+
     # get forecast data ===============================================================================
-    month_names = df_sales['MONTH'].tolist()
-    values1 = data.forecast_trend_df(datafile_location, supplier, model, month_names)
+    values1 = data.forecast_trend_df(datafile_location, supplier, model, month_list)
 
     df_forecast = values1[0]
-    df_forecast_all = values1[1]
+    df_forecast_sku = values1[1]
 
-    # st.write(df_forecast)
+    # st.write(df_forecast_sku)
+    # st.write(month_names)
+
     if show_forecast:
         fig.add_trace(go.Scatter(x=df_forecast['MONTH'],
                                  y=df_forecast['FORECAST'],
@@ -349,8 +384,11 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
                   annotation_font_color=color_hex(140),
                   line_color="green")
 
+    # st.plotly_chart(fig, use_container_width=True)
+    # st.stop()
+
     # get loading and received data ===================================================================
-    values2 = data.loading_trend_df(datafile_location, supplier, model, month_names)
+    values2 = data.loading_trend_df(datafile_location, supplier, model, month_list)
     df_loading = values2[0]
     df_received = values2[1]
 
@@ -398,10 +436,10 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
 
         st.plotly_chart(fig, use_container_width=True)
 
-    utils.download_csv(df_sales_all, 'Download Sales')
-    utils.download_csv(df_forecast_all, 'Download Forecast')
+        utils.download_csv(df_sales_all, 'Download Sales')
+        utils.download_csv(df_forecast_sku, 'Download Forecast')
 
-    end = time.perf_counter()  # stop runtime counter
-    st.sidebar.write(f"Runtime: {end - start:.2f} seconds")  # show runtime seconds
+        end = time.perf_counter()  # stop runtime counter
+        # st.sidebar.write(f"Runtime: {end - start:.2f} seconds")  # show runtime seconds
 
     return

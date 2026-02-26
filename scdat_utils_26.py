@@ -102,7 +102,7 @@ def get_long_month_name(month):
     month = datetime.date(1900, month, 1).strftime('%B')
     return month
 
-def get_month_order(month, year):
+def get_month_order_OLD(month, year):
     month_order = []
     year = int(year)
     month_no = get_month_no(month)
@@ -116,7 +116,6 @@ def get_month_order(month, year):
 
     return month_order
 
-
 def download_csv(df, text):
     text = text + ' (.csv)'
     coded_data = base64.b64encode(df.to_csv(index=False).encode()).decode()
@@ -126,15 +125,8 @@ def download_csv(df, text):
     )
     return
 
-def make_grid(cols, rows):
-    # function to make any grid
-    grid = [0]*cols
-    for i in range(cols):
-        with st.container():
-            grid[i] = st.columns(rows)
-    return grid
 
-def build_AgGrid_options(df, row_height=30, header_height=25):
+def build_AgGrid_options_OLD(df, row_height=30, header_height=25):
     gb = GridOptionsBuilder.from_dataframe(df)
     gb.configure_grid_options(rowHeight=row_height)
     gb.configure_grid_options(headerHeight=header_height)
@@ -156,7 +148,7 @@ def make_grid(cols, rows):
             grid[i] = st.columns(rows)
     return grid
 
-def format_sku_2(sku):
+def format_sku_2_OLD(sku):
     #st.write(sku)
     sku = str(sku)
     sku = sku[1:len(sku)]
@@ -182,4 +174,12 @@ def supplier_model_query(df, supplier, model):
 
     return df
 
+def show_header(txt):
 
+    st.markdown(f"""
+                    <div style="font-size:24px; color: #DAA520; font-family: Book Antiqua; font-weight:bold; margin-bottom:0px; margin-top:-45px;">
+                        {txt}
+                    </div>
+                    <hr style="border: 1px groove #EEB422;  width: 97.5%; margin-top:0px; margin-bottom:35px;">
+                    """, unsafe_allow_html=True)
+    return

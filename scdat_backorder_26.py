@@ -6,14 +6,7 @@ import scdat_data_26 as data
 import scdat_utils_26 as utils
 from scdat_colors_26 import color_hex
 def backorder_analysis(datafile_location):
-    # create header line
-    st.markdown("""
-    <div style="font-size:24px; color: #DAA520; font-family: Book Antiqua; font-weight:bold; margin-bottom:0px; margin-top:-30px;">
-        Backorders
-    </div>
-    <hr style="border: 1px groove #EEB422;  width: 97.5%; margin-top:0px; margin-bottom:35px;">
-    """, unsafe_allow_html=True)
-
+    utils.show_header('Backorders')
     df_backorder = data.backorder_df(datafile_location)     # get backorder data
 
     df_inventory = data.inventory_df(datafile_location)     # get inventory data

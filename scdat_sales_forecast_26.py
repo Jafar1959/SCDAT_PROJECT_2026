@@ -79,9 +79,6 @@ def sales_forecast_NEW(df):
     return df
 
 
-
-
-
 def check_flagship_models (datafile_location, year, df, m):
     values = data.yearly_sales_df(datafile_location, year)
     df1 = values[0]

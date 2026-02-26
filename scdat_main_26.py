@@ -1,4 +1,5 @@
 import streamlit as st
+
 # import streamlit.components.v1 as components
 
 from datetime import datetime
@@ -14,23 +15,37 @@ import scdat_figures_26 as fg
 import scdat_data_26 as data
 import scdat_backorder_26 as bk
 import scdat_sales_forecast_26 as sf
+import scdat_cargo_control_dashboard as cc
+import scdat_sales_forecast_dashboard_26 as sfd
+import scdat_inventory_count_26 as inv_count
+import scdat_product_chit_26 as chit
+
+
 
 # ============= my variables =========================
-CURRENT_MONTH = 'Nov'
-CURRENT_YEAR = '2025'
-FORECAST_MONTH = '11_Nov-2025'
+CURRENT_MONTH = 'Jan'
+CURRENT_YEAR = '2026'
+FORECAST_MONTH = '01_Jan-2026'
 SUPPLIERS = ['ALL',
             'Aquacubic',
+            'Bomeijia',
             'CAE Sanitary',
+            'Carysil',
+            'Changie',
             'Elleci',
+            'Galassia',
             'Huayi',
             'Nicos',
             'Plados',
             'Speed',
             'Speed Vietnam',
             'Stile Libero',
+            'UAE Fireclay',
+            'Wisdom',
             'Xindeli',
+            'Yalos',
             ]
+SUPPLIERS.sort()
 
 def configure_my_streamlit_page(logo):
     # define menu elements
@@ -45,6 +60,7 @@ def configure_my_streamlit_page(logo):
     # Hide footer only
     hide_streamlit_style = """
                 <style>
+                # header {visibility: hidden;}  # it will hide Deploy and three dots 
                 footer {visibility: hidden;}
                 </style>
                 """
@@ -54,27 +70,16 @@ def configure_my_streamlit_page(logo):
     reduce_header_height_style = """
             <style>
                 div.block-container {
-                    padding-top: 0rem;
+                    padding-top: 0rem !important;
                     padding-bottom: 0rem;
                     padding-left: 1rem;
                     padding-right: 0rem;
                 }
             </style>
         """
-
     st.markdown(reduce_header_height_style, unsafe_allow_html=True)
 
-    # reduce_header_height_style = """
-    #     <style>
-    #         div.block-container {padding-top:0rem;}
-    #         div.block-container {padding-bottom:0rem;}
-    #         div.block-container {padding-left:1rem;}
-    #         div.block-container {padding-right:0rem;}
-    #     </style>
-    # """
-    # st.markdown(reduce_header_height_style, unsafe_allow_html=True)
-
-    # fixed side bar size, color ============================================
+    # fixed sidebar size, color ============================================
     st.markdown("""
         <style>
             [data-testid="stSidebar"] { 
@@ -212,62 +217,15 @@ def opening_dashboard(datafile_location):
 
     return
 
-def dashboard_container_loading(datafile_location):
-    start = time.perf_counter()     # start runtime counter
-
-    st.markdown("""
-                <div style="font-size:24px; color: #DAA520; font-family: Book Antiqua; font-weight:bold; margin-bottom:0px; margin-top:-30px;">
-                    Container Loading
-                </div>
-                <hr style="border: 1px groove #EEB422;  width: 97.5%; margin-top:0px; margin-bottom:35px;">
-                """, unsafe_allow_html=True)
-
-    with st.spinner('Loading...'):  # show spinner
-
-        col1, col2, col3 = st.columns([4.1, 0.8, 0.1])
-
-        with col2:  # display monthly container loading =================================
-            values = fg.monthly_container_loading(datafile_location)
-            fig1 = values[0]    # YTD Container Loading
-            container_this_year = values[1]     # YTD Total Containers Loaded
-
-            # st.write(utils.get_month_elapsed())
-            # st.stop()
-
-            container_per_month = round(container_this_year/utils.get_month_elapsed(), 1)   # Average Containers per Month
-
-            txt = str(datetime.today().year) + ' | YTD Container Loading'
-            st.markdown(
-                f'<p style="font-family: Book Antiqua; color: {color_hex(238)}; text-align:left; font-size: 18px ;border-radius:1%;'
-                f' line-height:0em; margin-top:-5px"> {txt} </p>',
-                unsafe_allow_html=True)
-            st.plotly_chart(fig1, width='stretch')
-            st.write('Months Elapsed = ' + str(round(utils.get_month_elapsed(), 2)))
-
-        with col1:      # display container loading and receiving status for 5-months =======================================
-            txt = 'Incoming Container Details | YTD Total Containers: ' + str(container_this_year) + ' (' +str(container_per_month) + '/month) ' +\
-                  ' | ' + utils.get_todays_date()
-            st.markdown(
-                f'<p style="font-family: Book Antiqua; color: {color_hex(118)}; text-align:left; font-size: 20px ;border-radius:1%;'
-                f' line-height:0em; margin-top:-5px">{txt}</p>', unsafe_allow_html=True)
-
-            fig = fg.container_dashboard(datafile_location)
-            st.plotly_chart(fig, width='stretch')
-
-        end = time.perf_counter()   # stop runtime counter
-        st.sidebar.write(f"Runtime: {end - start:.2f} seconds")     # show runtime seconds
-
-    return
-
 def display_choices():
     if choice == 'Select Choice':
         opening_dashboard(DATAFILE_LOCATION)
 
     elif choice == 'Cargo Control Dashboard':
         menu0_1 = ["Select Choice",
-                   # "ETA Change",
-                   # "PO & BOL Matching",
-                   # "Received Containers",
+                   "Received Containers",
+                   "ETA Changes",
+                   "PO - BOL Matching",
                    # "Tariff Summary",
                    # "Customs Payment Update",
                    # "ZAxis Import Files",
@@ -280,9 +238,14 @@ def display_choices():
 
     elif choice == "Sales Analysis Dashboard":
         menu0_2 = ['Select Choice',
+                   'Inventory',
                    'Sales Forecast',
                    'Sales Trend',
+                   'Sales Anatomy',
+                   'Product Chit',
                    'Backorder List',
+                   'Inventory Count - Step 1',
+                   'Inventory Count - Step 2',
 
                   ]
         choice2 = st.sidebar.selectbox("CHOICE", menu0_2)
@@ -292,7 +255,16 @@ def display_choices():
 
 def display_choice1(choice1):
     if choice1 == "Select Choice":
-        dashboard_container_loading(DATAFILE_LOCATION)
+        cc.dashboard_container_loading(DATAFILE_LOCATION)
+
+    elif choice1 == "Received Containers":
+        cc.dashboard_container_received(DATAFILE_LOCATION)
+
+    elif choice1 == "ETA Changes":
+        cc.dashboard_ccs_mts_eta_mismatch(DATAFILE_LOCATION)
+
+    elif choice1 == "PO - BOL Matching":
+        cc.dashboard_po_bol_matching(DATAFILE_LOCATION)
 
     return
 
@@ -306,14 +278,29 @@ def display_choice2(choice1):
             <hr style="border: 1px groove #EEB422;  width: 97.5%; margin-top:0px; margin-bottom:35px;">
             """, unsafe_allow_html=True)
 
-    # elif choice1 == "Sales Forecast":
-    #     sf.display_sales_forecast(DATAFILE_LOCATION)
+        sfd.inventory_dashboard(DATAFILE_LOCATION, FORECAST_MONTH, SUPPLIERS)
+
+    elif choice1 == "Inventory":
+        sfd.inventory_distribution_pie_summary(DATAFILE_LOCATION, FORECAST_MONTH, SUPPLIERS)
 
     elif choice1 == "Sales Trend":
         fg.sales_trend_graph(DATAFILE_LOCATION, SUPPLIERS, FORECAST_MONTH)
 
     elif choice1 == "Backorder List":
         bk.backorder_analysis(DATAFILE_LOCATION)
+
+    elif choice1 == "Sales Anatomy":
+        sfd.sales_anatomy_dashboard(DATAFILE_LOCATION)
+
+    elif choice1 == "Inventory Count - Step 1":
+        inv_count.display_recount_list(DATAFILE_LOCATION)
+
+    elif choice1 == "Inventory Count - Step 2":
+        inv_count.display_recount_analysis()
+
+    elif choice1 == 'Product Chit':
+        chit.display_product_chit(DATAFILE_LOCATION)
+
     return
     #
     #
