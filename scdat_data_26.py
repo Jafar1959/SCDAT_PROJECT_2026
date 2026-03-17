@@ -1,12 +1,16 @@
+from typing import Any
+
 import pandas as pd
 from pathlib import Path, PureWindowsPath    # << for Window & Mac OS path-slash '\' or '/'
 import os
 
-import datetime
-#from datetime import datetime
+# import datetime
+from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
-from datetime import date, timedelta
+# from datetime import date, timedelta
 import calendar
+
+from pandas import Series, DataFrame
 from st_aggrid import GridOptionsBuilder, AgGrid    # GridUpdateMode, DataReturnMode
 
 import streamlit as st
@@ -28,83 +32,82 @@ def ccs_df(datafile_location):
     return df
 
 def container_df(datafile_location):
-    file_path = Path(PureWindowsPath(datafile_location + "Inventory\\Container.csv"))
-    df = pd.read_csv(file_path)
+    # file_path = Path(PureWindowsPath(datafile_location + "Inventory\\Container.csv"))
+    file_path = Path(datafile_location) / "Inventory" / "Container.csv"
 
-    df = df[['Container No.', 'Master Bill Of Lading', 'Estimated At Port Date', 'State', 'Container Lines/Product SKU',
-             'Container Lines/Qty To Load', 'Latest Updates']]
-
-    # change column name
-    df.columns = (['PO', 'BOL', 'ODDO_ETA', 'STATE', 'SKU', 'QTY', 'RECEIVED DATE'])
+    # read .csv file, select columns and rename columns
+    df = (
+        pd.read_csv(
+            file_path,
+            usecols=[
+                'Container No.', 'Master Bill Of Lading', 'Estimated At Port Date', 'State',
+                'Container Lines/Product SKU', 'Container Lines/Qty To Load',
+                'Latest Updates', 'Container Lines/Ship Date'
+            ]
+        )
+        .rename(columns={
+            'Container No.': 'PO',
+            'Master Bill Of Lading': 'BOL',
+            'Estimated At Port Date': 'ODDO_ETA',
+            'State': 'STATE',
+            'Container Lines/Product SKU': 'SKU',
+            'Container Lines/Qty To Load': 'QTY',
+            'Latest Updates': 'RECEIVED DATE',
+            'Container Lines/Ship Date': 'LOADING DATE'
+        })
+    )
 
     # remove space from SKU
     df['SKU'] = df['SKU'].str.strip()
 
-    # convert space to blank and copy the value from above row (if blank)
-    df['PO'] = df['PO'].replace(r'^\s*$', pd.NA, regex=True)
-    # df['PO'] = df['PO'].fillna(method='ffill')    # method deprecated <<<<<<<<<<<<<
-    df['PO'] = df['PO'].ffill()     # use method forward fill
+    # forward fill columns
+    fill_cols = ['PO', 'BOL', 'ODDO_ETA', 'STATE', 'RECEIVED DATE']
+    df[fill_cols] = df[fill_cols].replace(r'^\s*$', pd.NA, regex=True).ffill()
 
-    # st.write(df)
-    # st.stop()
+    # remove unwanted PO prefixes
+    bad_po_prefix = [
+        '0-', 'T', 't',
+        '2188HM-C', '2188HM-INCORRECT', '2204HM - CANCEL',
+        '2205MM - CANCEL', '2206HM - CANNOT RECEIVE',
+        '2241HM - CANNOT RECEIVE', '2241HM - CANCEL',
+        '2353 - CANCEL', '2603FC - Cancel',
+        '2588HM-CANCEL', '2660RBX', 'Huayi Sample'
+    ]
 
-    df['BOL'] = df['BOL'].replace(r'^\s*$', pd.NA, regex=True)
-    # df['BOL'] = df['BOL'].fillna(method='ffill')
-    df['BOL'] = df['BOL'].ffill()
+    df = df[~df['PO'].str.startswith(tuple(bad_po_prefix), na=False)]
 
-    df['ODDO_ETA'] = df['ODDO_ETA'].replace(r'^\s*$', pd.NA, regex=True)
-    # df['ODDO_ETA'] = df['ODDO_ETA'].fillna(method='ffill')
-    df['ODDO_ETA'] = df['ODDO_ETA'].ffill()
+    # remove unwanted SKUs
+    bad_skus = [
+        'RVH7417 - DO NOT USE', 'RVH8071 - DO NOT USE',
+        'RVH8118 - DO NOT USE', 'RVH8277 - DO NOT USE',
+        'RVH8341 [DO NOT USE]', 'RVH8359 - DO NOT USE',
+        'RVL2398BK - DO NOT USE', 'RVL2398WH - DO NOT USE'
+    ]
 
-    df['STATE'] = df['STATE'].replace(r'^\s*$', pd.NA, regex=True)
-    # df['STATE'] = df['STATE'].fillna(method='ffill')
-    df['STATE'] = df['STATE'].ffill()
+    df = df[~df['SKU'].isin(bad_skus)]
 
-    df['RECEIVED DATE'] = df['RECEIVED DATE'].replace(r'^\s*$', pd.NA, regex=True)
-    df['RECEIVED DATE'] = df['RECEIVED DATE'].ffill()
+    # remove null SKU
+    df = df[df['SKU'].notna()]
 
-    # get rows where 'PO' not (~) starts with '0-' , 'Test' or 'test'
-    df = df.loc[lambda row: ~ row['PO'].str.startswith('0-')]
-    df = df.loc[lambda row: ~ row['PO'].str.startswith('T')]
-    df = df.loc[lambda row: ~ row['PO'].str.startswith('t')]
+    # date conversion
+    df['ODDO_ETA'] = pd.to_datetime(df['ODDO_ETA']).dt.date
 
-    # remove unwanted rows --------------------------------------------------
-    df = df.loc[lambda row: ~ row['PO'].str.startswith('2188HM-C')]
-    df = df.loc[lambda row: ~ row['PO'].str.startswith('2188HM-INCORRECT')]
-    df = df.loc[lambda row: ~ row['PO'].str.startswith('2204HM - CANCEL')]
-    df = df.loc[lambda row: ~ row['PO'].str.startswith('2205MM - CANCEL')]
-    df = df.loc[lambda row: ~ row['PO'].str.startswith('2206HM - CANNOT RECEIVE')]
-    df = df.loc[lambda row: ~ row['PO'].str.startswith('2241HM - CANNOT RECEIVE')]
-    df = df.loc[lambda row: ~ row['PO'].str.startswith('2241HM - CANCEL')]
-    df = df.loc[lambda row: ~ row['PO'].str.startswith('2353 - CANCEL')]
-    df = df.loc[lambda row: ~ row['PO'].str.startswith('2603FC - Cancel')]
-    df = df.loc[lambda row: ~ row['PO'].str.startswith('2588HM-CANCEL')]
-    df = df.loc[lambda row: ~ row['PO'].str.startswith('2660RBX')]
-    df = df.loc[lambda row: ~ row['PO'].str.startswith('Huayi Sample')]
+    # extract location
+    df['LOCATION'] = df['RECEIVED DATE'].str[13:]
 
-    df = df[df['SKU'] != 'RVH7417 - DO NOT USE']
-    df = df[df['SKU'] != 'RVH8071 - DO NOT USE']
-    df = df[df['SKU'] != 'RVH8118 - DO NOT USE']
-    df = df[df['SKU'] != 'RVH8277 - DO NOT USE']
-    df = df[df['SKU'] != 'RVH8341 [DO NOT USE]']
-    df = df[df['SKU'] != 'RVH8359 - DO NOT USE']
-    df = df[df['SKU'] != 'RVL2398BK - DO NOT USE']
-    df = df[df['SKU'] != 'RVL2398WH - DO NOT USE']
+    df['RECEIVED DATE'] = (
+        pd.to_datetime(df['RECEIVED DATE'].str[:10])
+        .dt.date
+    )
 
-    df = df[df['SKU'].notna()]  # keep only rows where SKU is not null.
-
-    df['ODDO_ETA'] = pd.to_datetime(df['ODDO_ETA'])
-    df['ODDO_ETA'] = df['ODDO_ETA'].dt.date
-
-    df['LOCATION'] = df['RECEIVED DATE'].str[13:]   # separate received location information
-
-    df['RECEIVED DATE'] = df['RECEIVED DATE'].str[:10]
-    df['RECEIVED DATE'] = pd.to_datetime(df['RECEIVED DATE'])
-    df['RECEIVED DATE'] = df['RECEIVED DATE'].dt.date
-
+    # sort
     df = df.sort_values('PO', ascending=True)
 
-    return df
+    # split datasets
+    df_incoming = df[df['STATE'] != 'Received In Warehouse']
+    df_received = df[df['STATE'] == 'Received In Warehouse']
+
+    return df_incoming, df_received, df
 
 def product_df(datafile_location):
     # create product list df
@@ -203,7 +206,6 @@ def mts_df(datafile_location):
     df = df[df['Shipment#'] != 'S2363627']  # Not relevant item
 
     return df
-
 
 def amazon_df(datafile_location, month, year):
 
@@ -342,10 +344,12 @@ def wh_wise_inventory_df(datafile_location):
     z = prefix.upper()
 
     # WH_parts inventory only << =============================================================================
-    df_parts = df_wh[df_wh["LOCATION"] == 'WH1/Stock/' + z + 'Austin/PARTS']
-    df_parts['SKU'] = df_parts['SKU'].fillna('VOID')
-    df_parts = df_parts[df_parts["SKU"] != 'VOID']
-    df_parts = df_parts.loc[lambda row: row['SKU'].str.startswith('RVA')]
+    # df_parts = df_wh[df_wh["LOCATION"] == 'WH1/Stock/' + z + 'Austin/PARTS']
+    # df_parts['SKU'] = df_parts['SKU'].fillna('VOID')
+    # df_parts = df_parts[df_parts["SKU"] != 'VOID']
+    # df_parts = df_parts.loc[lambda row: row['SKU'].str.startswith('RVA')]
+
+    df_parts = df_wh.loc[lambda row: row['SKU'].str.startswith('RVA')]
 
     # WH1 inventory only, locations P, Q and P-Receiving only << =============================================
     df_temp = df_wh[df_wh["LOCATION"] != 'WH1/Stock/' + z + 'Austin/PARTS']
@@ -386,8 +390,8 @@ def wh_wise_inventory_df(datafile_location):
     df_refurb = df_refurb.loc[lambda row: row['SKU'].str.endswith('-REFURB')]
 
     # WH4 BOX inventory only, location L-BOX only  << ======================================================
-    df_box = df_wh.loc[lambda row: row['LOCATION'].str.startswith('WH1/Stock/' + z + 'Austin/L-BOXES')]
-    df_box = df_box.loc[lambda row: row['SKU'].str.startswith('RBX')]
+    # df_box = df_wh.loc[lambda row: row['LOCATION'].str.startswith('WH1/Stock/' + z + 'Austin/L-BOXES')]
+    df_box = df_wh.loc[lambda row: row['SKU'].str.startswith('RBX')]
 
     # location L-CONTAINER only  << ======================================================
     df_container = df_wh.loc[lambda row: row['LOCATION'].str.startswith('WH1/Stock/' + z + 'Austin/L-CON')]
@@ -420,10 +424,11 @@ def wh_wise_inventory_df(datafile_location):
     return df_wh, df_wh1, df_wh2, df_wh3, df_wh4, df_parts, df_box, df_refurb, df_container, df_retail, retail_models, df_faucet, df_bathtub
 
 
-def sc_summary_container_df_OLD(datafile_location, df_ccs1, supplier):
+def sc_summary_df(datafile_location, supplier, model):
 
-    # ----------------- filter df_CCS for incoming containers only ---------------------------------------
-    df_ccs = df_ccs1[df_ccs1['Delivered Date'] == 'BLANK']
+    # ----------------- df_CCS for incoming containers only ---------------------------------------
+    df_ccs = ccs_df(datafile_location)
+    df_ccs = df_ccs[df_ccs['Delivered Date'] == 'BLANK']
     df_ccs = df_ccs[['CONTAINER NO.', 'FROM', 'Loading Date']]
     df_ccs = df_ccs.rename(columns={'CONTAINER NO.': 'PO', 'FROM': 'SUPPLIER'})
 
@@ -446,30 +451,108 @@ def sc_summary_container_df_OLD(datafile_location, df_ccs1, supplier):
     # --------------------- QUERY ON SUPPLIER --------------------------------------------------
     df = df_ccs_container.copy()    # make a copy of the merge file
 
-    if supplier != 'ALL' and supplier != 'Speed':
+    if supplier == 'Speed':     # query on supplier ================================
+        df = df[df['SUPPLIER'].isin(['Speed', 'Speed (Vietta)'])]
+    elif supplier != 'ALL':
         df = df[df['SUPPLIER'] == supplier]
 
-    if supplier == 'Speed':
-        df = df[(df['SUPPLIER'] == 'Speed') | (df['SUPPLIER'] == 'Speed (Vietta)')]
 
-    incoming_qty = df['QTY'].sum()
+    if model != 'ALL':   # query on model or color ================================
+
+        df = df.loc[
+            lambda row: row['SKU'].str.startswith(model.upper()) |
+                        row['SKU'].str.endswith(model.upper())
+        ]
+
+    total_incoming_qty = df['QTY'].sum()
 
     df_container_no = df.drop_duplicates(subset=['PO'], keep='first')
     incoming_containers = df_container_no['PO'].count()
 
     # ------------------ SUMMARY DATAFRAME ------------------------------------------------
-    df_summary = pd.DataFrame({'Ocean': [incoming_qty],
+    df_summary = pd.DataFrame({'Ocean': [total_incoming_qty],
                                'Containers': [incoming_containers],
                                })
 
-    # st.write(df)
-    # st.write(df_summary)
-    # st.stop()
-
+    # datafile columns: df = [PO, SUPPLIER, Loading Date, ZEN_ETA, SKU, QTY]
+    # datafile columns: df_summary = [Ocean, Containers]
     return df, df_summary
 
 
-def inocean_container_df_OLD(datafile_location, df):
+def monthly_incoming_and_received_qty(datafile_location, supplier, model):
+    first_day = datetime.today().replace(day=1)
+    first_day = first_day.strftime("%Y-%m-%d")
+
+
+    st.write(first_day)
+
+    # ----------------- df_CCS for incoming containers only ---------------------------------------
+    df_ccs = ccs_df(datafile_location)
+    df_ccs = df_ccs[['CONTAINER NO.', 'FROM', 'Loading Date']]
+    df_ccs = df_ccs.rename(columns={'CONTAINER NO.': 'PO', 'FROM': 'SUPPLIER'})
+
+    # --------------- INCOMING CONTAINERS ONLY --------------------------------
+    df_container = container_df(datafile_location)
+    df_container = df_container.rename(columns={'ODDO_ETA': 'ZEN_ETA'})     # change column name
+
+    df_container = df_container.loc[lambda row: ~ row['SKU'].str.startswith('RVA')]  # remove all accessories
+    df_container = df_container.loc[lambda row: ~ row['SKU'].str.startswith('RVP')]  # remove faucet accessories
+
+    df_container['PO'] = df_container['PO'].astype(str).str.extract(r"(\d{4})")
+    # df_container['PO'] = df_container.apply(lambda x: str(x.iloc[0])[0:4], axis=1)  # keep only first 4-digit of container no.
+
+    df_in_ocean = df_container[df_container['STATE'] != 'Received In Warehouse']
+    df_in_ocean = pd.merge(df_ccs, df_in_ocean, on=["PO"], how='left')
+    df_in_ocean = df_in_ocean[df_in_ocean['SUPPLIER'] != 'BLANK']
+    df_in_ocean = df_in_ocean[['PO', 'SUPPLIER', 'Loading Date', 'ZEN_ETA', 'SKU', 'QTY']]
+
+    df_received = df_container[df_container['STATE'] == 'Received In Warehouse']
+    df_received = pd.merge(df_received, df_container, on=["PO"], how='left')
+
+    st.dataframe(df_in_ocean)
+    st.dataframe(df_received)
+    st.stop()
+
+    df_container = df_container.rename(columns={'ODDO_ETA': 'ZEN_ETA'})
+    df_container['PO'] = df_container.apply(lambda x: str(x.iloc[0])[0:4], axis=1)      # keep only first 4-digit of container no.
+
+    # ------------------- MERGE (CCS + CONTAINER) -----------------------------------------------
+    df_ccs_container = pd.merge(df_ccs, df_container, on=["PO"], how='left')
+    df_ccs_container = df_ccs_container[['PO', 'SUPPLIER', 'Loading Date', 'ZEN_ETA', 'SKU', 'QTY']]
+    df_ccs_container = df_ccs_container.fillna(0)
+    df_ccs_container = df_ccs_container[df_ccs_container['ZEN_ETA'] != 0]
+
+    # --------------------- QUERY ON SUPPLIER --------------------------------------------------
+    df = df_ccs_container.copy()    # make a copy of the merge file
+
+    if supplier == 'Speed':     # query on supplier ================================
+        df = df[df['SUPPLIER'].isin(['Speed', 'Speed (Vietta)'])]
+    elif supplier != 'ALL':
+        df = df[df['SUPPLIER'] == supplier]
+
+
+    if model != 'ALL':   # query on model or color ================================
+
+        df = df.loc[
+            lambda row: row['SKU'].str.startswith(model.upper()) |
+                        row['SKU'].str.endswith(model.upper())
+        ]
+
+    total_incoming_qty = df['QTY'].sum()
+
+    df_container_no = df.drop_duplicates(subset=['PO'], keep='first')
+    incoming_containers = df_container_no['PO'].count()
+
+    # ------------------ SUMMARY DATAFRAME ------------------------------------------------
+    df_summary = pd.DataFrame({'Ocean': [total_incoming_qty],
+                               'Containers': [incoming_containers],
+                               })
+
+    # datafile columns: df = [PO, SUPPLIER, Loading Date, ZEN_ETA, SKU, QTY]
+    # datafile columns: df_summary = [Ocean, Containers]
+    return # df, df_summary
+
+def inocean_container_df(datafile_location, df):
 
     df_qty = container_wise_incoming_qty(datafile_location)
     df_qty = df_qty.groupby('PO')['QTY'].sum().to_frame().reset_index()
@@ -593,16 +676,16 @@ def sales_trend_df(datafile_location, supplier, model, month_list):
     df_sales = pd.DataFrame({})
 
     for i in range (0, len(month_list)):
-        m = str(month_list[i])[:3]
-        y = str(month_list[i])[-2:]
+        m = str(month_list[i])[:3]      # get month short name from month_list like Jan, Feb ....
+        y = str(month_list[i])[-2:]     # get month two digit year like 25, 26 ....
 
-        month_num = datetime.strptime(m, "%b").month
+        month_num = datetime.strptime(m, "%b").month    # get month number from short month name
 
-        month_num = f"{month_num:02}"   # format '01', '02' etc
+        month_num = f"{month_num:02}"   # format month number as '01', '02' etc
 
-        file_name = y + month_num + '_Sales_' + str(month_list[i]) + '.csv'
+        file_name = y + month_num + '_Sales_' + str(month_list[i]) + '.csv'     # generate monthly sales file name
 
-        path = datafile_location + 'Sales\\Monthly_Sales\\MONTHLY\\' + file_name
+        path = datafile_location + 'Sales\\Monthly_Sales\\MONTHLY\\' + file_name    # read monthly sales file
         df = pd.read_csv(Path(PureWindowsPath(path)))
         df = df[['SKU', 'SUPPLIER', 'AMAZON', 'ODDO', 'TOTAL']]
 
@@ -635,7 +718,7 @@ def sales_trend_df(datafile_location, supplier, model, month_list):
 
 def forecast_trend_df(datafile_location, supplier, model, month_list):
 
-    df_forecast = pd.DataFrame({})
+    dfs = []
 
     for i in range(0 , len(month_list)):
 
@@ -651,27 +734,47 @@ def forecast_trend_df(datafile_location, supplier, model, month_list):
         # st.write(forecast_month)
 
         df = forecast_df(datafile_location, forecast_month, supplier)
-        # st.write(df)
+        df = df[['SKU', 'SUPPLIER', 'FORECAST', 'MONTH']]
+        dfs.append(df)
 
-        df = df[['SKU', 'FORECAST', 'SUPPLIER', 'MONTH']]
-
-        if i == 0:
-            df_forecast = df
-
-        else:
-            df_forecast = pd.concat([df_forecast, df])
-
+    df_forecast: Series | DataFrame | Any = pd.concat(dfs, ignore_index=True)
+    model = model.upper()
+    if model != 'ALL':  # query on model or color
+        df_forecast = df_forecast.loc[
+            lambda row: row['SKU'].str.startswith(model.upper()) |
+                        row['SKU'].str.endswith(model.upper())
+        ]
     # df_forecast = utils.supplier_model_query(df_forecast, supplier, model)  # query on supplier & model / color
 
-    df_sink = df_forecast[~df_forecast['SKU'].astype(str).str.contains("RVA")]      # <<<<<<<<<< REMOVE RVA <<<<<<<<<<<<<<
+    # st.write(df)
 
+
+    #     # st.write(df_temp)
+    #     # st.stop()
+    #
+    #     df = df[['SKU', 'FORECAST', 'SUPPLIER', 'MONTH']]
+    #
+    #     if i == 0:
+    #         df_forecast = df
+    #
+    #     else:
+    #         df_forecast = pd.concat([df_forecast, df])
+    #
+    # #df_forecast = utils.supplier_model_query(df_forecast, supplier, model)  # query on supplier & model / color
+    #
+    df_sink = df_forecast[~df_forecast['SKU'].astype(str).str.contains("RVA")]      # <<<<<<<<<< REMOVE RVA <<<<<<<<<<<<<<
+    #
     df_sink = df_sink.groupby('MONTH', sort=False)['FORECAST'].sum().to_frame().reset_index()
+    #
+    # st.write(df_sink)
+    # st.write(df_forecast)
+    # # st.stop()
 
     return df_sink, df_forecast
 
-
 def loading_trend_df(datafile_location, supplier, model, month_names):
-    df_container = container_df(datafile_location)      # get container data ===================================
+    values = container_df(datafile_location)      # get container data ===================================
+    df_container = values[2]
 
     df_container = df_container[['SKU', 'QTY', 'PO', 'STATE', 'RECEIVED DATE']]
     df_container['PO'] = df_container['PO'].str[:4]      # get only first 4 digit of PO
@@ -684,11 +787,12 @@ def loading_trend_df(datafile_location, supplier, model, month_names):
     df_ccs['LOADING DATE'] = pd.to_datetime(df_ccs['LOADING DATE'])
     df_ccs['LOADING DATE'] = df_ccs['LOADING DATE'].dt.date     # remove timestamp
 
+    # merge to get supplier name
     df = pd.merge(df_container, df_ccs, on=["PO"], how='left')
     df = df[['PO', 'SUPPLIER', 'SKU', 'QTY', 'LOADING DATE', 'RECEIVED DATE', 'STATE']]
 
-    df = df.loc[lambda row: ~ row['SKU'].str.startswith('RVA')]     # remove accessories
-    df = df.loc[lambda row: ~ row['SKU'].str.startswith('RBX')]     # remove packing boxes
+    exclude_prefixes = ('RVA', 'RBX', 'RDM', 'RVP')     # remove all accessories, packing boxes, dummy faucet & faucet parts
+    df = df[~df['SKU'].str.startswith(exclude_prefixes)]
 
     df = df.dropna(subset='SUPPLIER')       # remove row with SUPPLIER = null
 
@@ -724,94 +828,6 @@ def loading_trend_df(datafile_location, supplier, model, month_names):
 
     df_loading = df_loading[df_loading['LOADING DATE'].isin(month_names)]
 
-    # st.write(df_container)
-    # st.write(df_ccs)
-    # st.write(df)
-    # st.write(df_received)
-    # st.write(df_loading)
-    # st.stop()   # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-    #
-    # # MONTH, LOADING
-    # # df1 = container_plus_ccs_df(datafile_location)
-    # df1 = df1.loc[lambda row: ~ row['SKU'].str.startswith('RVA')]
-    # df1 = df1.loc[lambda row: ~ row['SKU'].str.startswith('RBX')]   # empty boxes
-    #
-    # df_loading = df1
-    #
-    # # 5 = 'LOADING DATE'
-    # # st.write(df_loading)
-    # df_loading['LOADING MONTH'] = df_loading.apply(lambda x: str(x.iloc[5])[0:7], axis=1)
-    #
-    # #st.write(df_loading)
-    #
-    # df_received = df1[df1['STATE'] == 'Received In Warehouse'].copy()
-    #
-    # # 6 = 'RECEIVED DATE'
-    # df_received['RECEIVED MONTH'] = df_received.apply(lambda x: str(x.iloc[6])[0:7], axis=1)
-    #
-    # # st.write(df_received)
-    #
-    # loading = []
-    # received = []
-    # container_loading = []
-    # container_received = []
-    #
-    # for i in range(0, len(month_names)):
-    #
-    #     month_name = month_names[i]
-    #     year = '20' + month_name[-2:]
-    #
-    #     month_no = datetime.datetime.strptime(month_name[:3], "%b").month
-    #
-    #     if month_no < 10:
-    #         month_no = '0' + str(month_no)
-    #     else:
-    #         month_no = str(month_no)
-    #
-    #     year_month = year + '-' + month_no
-    #
-    #     df_monthly_loading = df_loading[df_loading['LOADING MONTH'] == year_month].copy()
-    #     df_monthly_received = df_received[df_received['RECEIVED MONTH'] == year_month].copy()
-    #
-    #     #st.write(df)
-    #     # st.stop()
-    #
-    #     if model.upper() != 'ALL':
-    #         df_monthly_loading = df_monthly_loading[df_monthly_loading['SKU'] == model.upper()]
-    #         df_monthly_received = df_monthly_received[df_monthly_received['SKU'] == model.upper()]
-    #
-    #     if supplier != 'ALL' and supplier != 'Speed':
-    #
-    #         if len(df_monthly_loading) > 0:
-    #             df_monthly_loading = df_monthly_loading[df_monthly_loading['SUPPLIER'] == supplier].copy()
-    #
-    #         if len(df_monthly_received) > 0:
-    #             df_monthly_received = df_monthly_received[df_monthly_received['SUPPLIER'] == supplier].copy()
-    #
-    #     if supplier == 'Speed':
-    #         df_monthly_loading = df_monthly_loading[(df_monthly_loading['SUPPLIER'] == 'Speed') | (df_monthly_loading['SUPPLIER'] == 'Speed (Vietta)')]
-    #         df_monthly_received = df_monthly_received[(df_monthly_received['SUPPLIER'] == 'Speed') | (df_monthly_received['SUPPLIER'] == 'Speed (Vietta)')]
-    #
-    #     total_loading = df_monthly_loading['QTY'].sum()
-    #     total_received = df_monthly_received['QTY'].sum()
-    #     loading.append(total_loading)
-    #     received.append(total_received)
-    #
-    #     df_container_loading = df_monthly_loading.drop_duplicates(subset=['PO'], keep='first')
-    #     total_container_loading = df_container_loading['PO'].count()
-    #     container_loading.append(total_container_loading)
-    #
-    #     df_container_received = df_monthly_received.drop_duplicates(subset=['PO'], keep='first')
-    #     total_container_received = df_container_received['PO'].count()
-    #     container_received.append(total_container_received)
-    #
-    # df = pd.DataFrame({'MONTH': month_names,
-    #                    'LOADING': loading,
-    #                    'RECEIVED': received,
-    #                    'CONTAINER (L)': container_loading,
-    #                    'CONTAINER (R)': container_received,
-    #                    })
-    # st.write(df)
     return df_loading, df_received
 
 
@@ -1069,10 +1085,11 @@ def yearly_sales_df(datafile_location, year):
     df_sales['TOTAL'] = df_sales.sum(numeric_only=True, axis=1)
 
     # +++++++++++ calculate month elapsed in the current year to calculate average +++++++++++++++++++++++++++++++
-    today = datetime.date.today()
+    today = date.today()
 
-    date1 = datetime.date(year, 1, 1)
-    date2 = today
+    date1 = date(year, 1, 1)    # first day of the year
+
+    date2 = today   # today's date
 
     total_days = calendar.monthrange (year, today.month)
 
@@ -1096,3 +1113,69 @@ def yearly_sales_df(datafile_location, year):
 
     # st.write(df_sales)
     return df_sales, year, month_elapsed
+
+
+def lowes_sales(datafile_location):
+    utils.show_header("Lowe's Sales")
+    month_elapsed = utils.get_month_elapsed()
+    st.write('Month Elapsed = ' + str(round(month_elapsed,2)))
+
+    path = Path(PureWindowsPath(datafile_location + "LOWES\\Lowe's Sales.xlsx"))
+    df = pd.read_excel(path, sheet_name='SALES', header=0)
+    df = df[['Day', 'SKU', 'Sales Units - TY']]
+    df['Day'] = df['Day'].dt.strftime('%Y-%m')
+    df = df.rename(columns={'Sales Units - TY': 'Sales'})
+
+    df_monthly: object = df.groupby(['Day', 'SKU'])['Sales'].count().to_frame().reset_index()
+
+    df_monthly['Day'] = df_monthly['Day'].astype(str)
+
+    month_list = df_monthly['Day'].tolist()
+    months = list(dict.fromkeys(month_list))
+
+    df1 = pd.DataFrame({})
+    for m in months:
+        # st.write(m)
+        df_temp = df_monthly[df_monthly['Day'] == m]
+        df_temp = df_temp.rename(columns={'Sales': m})
+        df_temp = df_temp[['SKU', m]]
+        # st.write(df_temp)
+
+        if months.index(m) == 0:
+            df1 = df_temp
+        else:
+            df1 = pd.merge(df1, df_temp, on=["SKU"], how='outer')
+
+    df1 = df1.fillna(0)
+
+    # ============ Total Sales & Monthly Sales ==================
+    cols = df1.columns[1:]
+    df1['Total'] = df1[cols].sum(axis=1)
+    df1['Monthly'] = round(df1['Total'] / month_elapsed, 0)
+
+    # ======================== ADD INVENTORY ===================================
+    df_inventory = inventory_df(datafile_location)
+    df_inventory = df_inventory[['SKU', 'COLLECTION', 'Existing Qty']]
+    df_inventory = df_inventory[df_inventory['COLLECTION'] == 'Lowes']
+    df_inventory = df_inventory.drop(columns=['COLLECTION'])
+
+    df_inventory = df_inventory.rename(columns={'Existing Qty': 'WH'})
+
+    df1 = pd.merge(df1, df_inventory, on=["SKU"], how='left')
+    # ======================== ADD INCOMING ===================================
+    values = container_df(datafile_location)
+    df_incoming = values[0]
+    df_incoming = df_incoming[['SKU', 'QTY']]
+    df_incoming = df_incoming.groupby('SKU')['QTY'].sum().to_frame().reset_index()
+    df_incoming = df_incoming.rename(columns={'QTY': 'INCOMING'})
+
+    df1 = pd.merge(df1, df_incoming, on=["SKU"], how='left')
+
+    # =======================+ ADD TOTAL ROW & SHOW TABLE ================================
+    df1.loc['Total'] = df1.sum(numeric_only=True)
+    df1.loc['Total', df1.columns[0]] = 'TOTAL'
+
+    AgGrid(df1, height=270)
+    utils.download_csv(df1, 'Download')
+    return
+

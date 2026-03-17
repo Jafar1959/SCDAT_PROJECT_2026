@@ -99,14 +99,14 @@ def inventory_mix_df(datafile_location, forecast_month, supplier, model):
                            })
 
     # st.write(df)
-    utils.download_csv(df, 'Download')
+    # utils.download_csv(df, 'Download')
 
     return df, df_mix
 
-def inventory_dashboard(datafile_location, forecast_month, suppliers):
-    start = time.perf_counter()
-    supplier = st.sidebar.selectbox("SUPPLIER", suppliers)
-    model = st.sidebar.text_input("MODEL / COLOR", "ALL")
+def inventory_dashboard(datafile_location, forecast_month, supplier, model):
+    # start = time.perf_counter()
+    # supplier = st.sidebar.selectbox("SUPPLIER", suppliers)
+    # model = st.sidebar.text_input("MODEL / COLOR", "ALL")
 
     values = inventory_mix_df(datafile_location, forecast_month, supplier, model)
     df_pie = values[1]
@@ -140,12 +140,10 @@ def inventory_dashboard(datafile_location, forecast_month, suppliers):
 
     fig.update_traces(sort=False)
 
-
-
     fig.update_layout(legend=dict(title_font_family="Book Antiqua",
 
                       font=dict(size=14),
-                      x=0.5 - 0.16,
+                      x=0,
                       y=0.5,
                       xanchor="left",
                       yanchor="middle",
@@ -197,8 +195,8 @@ def inventory_dashboard(datafile_location, forecast_month, suppliers):
 
     st.plotly_chart(fig, width='stretch')
 
-    end = time.perf_counter()  # stop runtime counter
-    st.sidebar.write(f"Runtime: {end - start:.2f} seconds")  # show runtime seconds
+    # end = time.perf_counter()  # stop runtime counter
+    # st.sidebar.write(f"Runtime: {end - start:.2f} seconds")  # show runtime seconds
 
     return
 
@@ -440,7 +438,7 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
 
         fig1.update_layout(legend=dict(title_font_family="Book Antiqua", font=dict(size=12), orientation='v', x=0.95, y=0.5, yanchor='middle'))
 
-        mygrid[row][col].plotly_chart(fig1, use_container_width=True)
+        mygrid[row][col].plotly_chart(fig1, width='stretch')
 
         col = col + 1
         if col > 2:
@@ -658,7 +656,7 @@ def sales_anatomy_dashboard(datafile_location):
         )
 
         fig1.update_layout(height=480, margin=dict(l=0, r=0, b=0, t=0))
-        st.plotly_chart(fig1, use_container_width=True)
+        st.plotly_chart(fig1, width='stretch')
 
     with col2:
         # ======================== ZEN & FBA SALES PIE ================================
@@ -691,7 +689,7 @@ def sales_anatomy_dashboard(datafile_location):
                             showarrow=False)
 
         fig2.update_layout(height=200, margin=dict(l=0, r=0, b=0, t=0))
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width='stretch')
 
         # ======================== MEDIAN PRICE SALES ================================
         st.write('')

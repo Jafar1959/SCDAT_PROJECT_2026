@@ -160,6 +160,8 @@ def format_sku_2_OLD(sku):
     return sku
 
 def supplier_model_query(df, supplier, model):
+    # df['SUPPLIER'].str.upper()
+    # supplier = supplier.upper()
     model = model.upper()
 
     if model != 'ALL':
@@ -169,6 +171,7 @@ def supplier_model_query(df, supplier, model):
                         row['SKU'].str.endswith(model.upper())
         ]
 
+    # st.write(df)
     if supplier != 'ALL':
         df = df[df['SUPPLIER'] == supplier]
 

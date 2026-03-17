@@ -269,7 +269,7 @@ def display_final_inventory(df, index):
     return
 
 
-def display_recount_analysis():
+def display_recount_analysis():     # SET WH, DIRECTORY & DATE <<<<<<<<<<<<<<<<<<<<<<
     title_text = "Inventory Count - 3rd Count List"
     st.markdown(f"""<div style="font-size:24px; color: #DAA520; font-family: Book Antiqua; font-weight:bold; margin-bottom:0px; margin-top:-45px;">
                                     {title_text}
@@ -277,15 +277,17 @@ def display_recount_analysis():
                                 <hr style="border: 1px groove #EEB422;  width: 97.5%; margin-top:0px; margin-bottom:35px;">
                                 """, unsafe_allow_html=True)
 
-    warehouse = 'WH2'
+    # ============================ SET WH, DIRECTORY & DATE =================================================================
+    warehouse = 'WH4'
     warehouse = st.sidebar.text_input("Warehouse ...", value=warehouse)
 
     file_location = "G:\\My Drive\\STREAMLIT\\Meeting@Desktop\\Inventory Count\\"
-    file_path1 = "2026\\01_Jan-2026\\" + warehouse + "\\"  # <<<<<<<<<<<<<<<<<<<
+    file_path1 = "2026\\02_Feb-2026\\" + warehouse + "\\"  # <<<<<<<<<<<<<<<<<<<
 
-    recount_date = '01.30'
+    recount_date = '02.27'
+    # ======================================================================================================================
+
     recount_date = st.sidebar.text_input("Inventory Count Date ...", value=recount_date)
-
 
     file_name = warehouse + "_Recount_Data-" + recount_date + ".xlsx"   # <<<<<<<<<<<<<<<<<<<
 

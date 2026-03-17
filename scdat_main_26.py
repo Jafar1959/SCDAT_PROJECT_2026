@@ -23,9 +23,9 @@ import scdat_product_chit_26 as chit
 
 
 # ============= my variables =========================
-CURRENT_MONTH = 'Jan'
+CURRENT_MONTH = 'Mar'
 CURRENT_YEAR = '2026'
-FORECAST_MONTH = '01_Jan-2026'
+FORECAST_MONTH = '03_Mar-2026'
 SUPPLIERS = ['ALL',
             'Aquacubic',
             'Bomeijia',
@@ -217,157 +217,85 @@ def opening_dashboard(datafile_location):
 
     return
 
+
 def display_choices():
     if choice == 'Select Choice':
         opening_dashboard(DATAFILE_LOCATION)
+        return
 
-    elif choice == 'Cargo Control Dashboard':
-        menu0_1 = ["Select Choice",
-                   "Received Containers",
-                   "ETA Changes",
-                   "PO - BOL Matching",
-                   # "Tariff Summary",
-                   # "Customs Payment Update",
-                   # "ZAxis Import Files",
-                   # "WH Layout",
-                   # "MTS Rate Graph"
-                    ]
-        choice1 = st.sidebar.selectbox("CHOICE", menu0_1)
+    menus = {
+        "Cargo Control Dashboard": {
+            "items": [
+                "Select Choice",
+                "Received Containers",
+                "ETA Changes",
+                "PO - BOL Matching",
+            ],
+            "handler": display_choice1
+        },
 
-        display_choice1(choice1)
+        "Sales Analysis Dashboard": {
+            "items": [
+                "Select Choice",
+                "Inventory",
+                "Sales Forecast",
+                "Sales Trend",
+                "Sales Anatomy",
+                "Product Chit",
+                "Backorder List",
+                "Lowes Sales",
+                "Inventory Count - Step 1",
+                "Inventory Count - Step 2",
+                "Test"
+            ],
+            "handler": display_choice2
+        }
+    }
 
-    elif choice == "Sales Analysis Dashboard":
-        menu0_2 = ['Select Choice',
-                   'Inventory',
-                   'Sales Forecast',
-                   'Sales Trend',
-                   'Sales Anatomy',
-                   'Product Chit',
-                   'Backorder List',
-                   'Inventory Count - Step 1',
-                   'Inventory Count - Step 2',
-
-                  ]
-        choice2 = st.sidebar.selectbox("CHOICE", menu0_2)
-
-        display_choice2(choice2)
-    return
+    if choice in menus:
+        menu = menus[choice]
+        selected = st.sidebar.selectbox("CHOICE", menu["items"])
+        menu["handler"](selected)
 
 def display_choice1(choice1):
-    if choice1 == "Select Choice":
-        cc.dashboard_container_loading(DATAFILE_LOCATION)
 
-    elif choice1 == "Received Containers":
-        cc.dashboard_container_received(DATAFILE_LOCATION)
+    actions = {
+        "Select Choice": cc.dashboard_container_loading,
+        "Received Containers": cc.dashboard_container_received,
+        "ETA Changes": cc.dashboard_ccs_mts_eta_mismatch,
+        "PO - BOL Matching": cc.dashboard_po_bol_matching,
+    }
 
-    elif choice1 == "ETA Changes":
-        cc.dashboard_ccs_mts_eta_mismatch(DATAFILE_LOCATION)
-
-    elif choice1 == "PO - BOL Matching":
-        cc.dashboard_po_bol_matching(DATAFILE_LOCATION)
-
-    return
+    if choice1 in actions:
+        actions[choice1](DATAFILE_LOCATION)
 
 def display_choice2(choice1):
-    if choice1 == "Select Choice":
-        # create header line
+
+    def under_construction():
         st.markdown("""
-            <div style="font-size:24px; color: #DAA520; font-family: Book Antiqua; font-weight:bold; margin-bottom:0px; margin-top:-30px;">
-                Under Construction
-            </div>
-            <hr style="border: 1px groove #EEB422;  width: 97.5%; margin-top:0px; margin-bottom:35px;">
-            """, unsafe_allow_html=True)
+        <div style="font-size:24px; color: #DAA520; font-family: Book Antiqua; font-weight:bold; margin-bottom:0px; margin-top:-30px;">
+            Under Construction
+        </div>
+        <hr style="border: 1px groove #EEB422; width: 97.5%; margin-top:0px; margin-bottom:35px;">
+        """, unsafe_allow_html=True)
 
-        sfd.inventory_dashboard(DATAFILE_LOCATION, FORECAST_MONTH, SUPPLIERS)
+    actions = {
+        "Select Choice": under_construction,
+        "Inventory": lambda: sfd.inventory_distribution_pie_summary(DATAFILE_LOCATION, FORECAST_MONTH, SUPPLIERS),
+        "Sales Trend": lambda: fg.sales_trend_graph(DATAFILE_LOCATION, SUPPLIERS, FORECAST_MONTH),
+        "Backorder List": lambda: bk.backorder_analysis(DATAFILE_LOCATION),
+        "Sales Anatomy": lambda: sfd.sales_anatomy_dashboard(DATAFILE_LOCATION),
+        "Inventory Count - Step 1": lambda: inv_count.display_recount_list(DATAFILE_LOCATION),
+        "Inventory Count - Step 2": inv_count.display_recount_analysis,
+        "Product Chit": lambda: chit.display_product_chit(DATAFILE_LOCATION),
+        "Lowes Sales": lambda: data.lowes_sales(DATAFILE_LOCATION),
+        "Test": fg.test,
+    }
 
-    elif choice1 == "Inventory":
-        sfd.inventory_distribution_pie_summary(DATAFILE_LOCATION, FORECAST_MONTH, SUPPLIERS)
+    action = actions.get(choice1)
 
-    elif choice1 == "Sales Trend":
-        fg.sales_trend_graph(DATAFILE_LOCATION, SUPPLIERS, FORECAST_MONTH)
-
-    elif choice1 == "Backorder List":
-        bk.backorder_analysis(DATAFILE_LOCATION)
-
-    elif choice1 == "Sales Anatomy":
-        sfd.sales_anatomy_dashboard(DATAFILE_LOCATION)
-
-    elif choice1 == "Inventory Count - Step 1":
-        inv_count.display_recount_list(DATAFILE_LOCATION)
-
-    elif choice1 == "Inventory Count - Step 2":
-        inv_count.display_recount_analysis()
-
-    elif choice1 == 'Product Chit':
-        chit.display_product_chit(DATAFILE_LOCATION)
-
-    return
-    #
-    #
-    #
-    # elif choice == "2. Sales Forecast Dashboard":
-    #     menu0_2 = ["Select Choice",
-    #                "Inventory Monitoring",
-    #                "One Month Sales",
-    #                "Sales Report",
-    #                "6-Month Inventory History",
-    #                "Sales Anatomy",
-    #                "Sales Forecast",
-    #                "4-Month Loading Plan",
-    #                'FBA Loading Plan',
-    #                'Backorder List',
-    #                'Recount List',
-    #                'Recount Analysis',
-    #                "Warehouse wise Inventory",
-    #                "Shipment Modelling",
-    #                "Existing & Incoming Inventory",
-    #                "Received Inventory",
-    #                'Box Inventory',
-    #                'Box Order Qty',
-    #                'Box Inventory Count Sheet',
-    #                "Datafeed Products",
-    #                "Flagship Models",
-    #                "Annual Flagship Models",
-    #                "Average Sales Trend",
-    #                "Dealer Sales Report",
-    #                "Dealer Sales Graph",
-    #                "6-Month Sales Graph",
-    #                "Maruf Data_1",
-    #                "Maruf Data_2",
-    #                "Balance Order Qty",
-    #                "Elleci-China Accessories",
-    #                "Dealer-wise SKU Sales",
-    #                "Inventory Balance Sheet",
-    #                "Supplier-wise Returns",
-    #                "Geo Locations",
-    #                "Top-Seller",
-    #                "Product Chit",
-    #                "Return Product Chit",
-    #                "Vendor Bills",
-    #                "Product Internal Transfer",
-    #                #"Universal Dashboard",
-    #                #"General Dashboard",
-    #                #"Inventory Level Projection",
-    #                #"Transfer List",
-    #                #'Forecast Vs Sales',
-    #
-    #                # "ZEN Purchase Orders",
-    #                #"Inventory Dashboard 70%",
-    #                # "Loading Priority",
-    #                # "Actual Loading",
-    #                # "Missing Supplier"
-    #                #'Negative Inventory',
-    #                #'Customer Review',
-    #                #'Word Cloud',
-    #                #'Speed Production Plan Summary',
-    #                ]
-    #     choice2 = st.sidebar.selectbox("CHOICE", menu0_2)
-    #     display_choice2(choice2)
-    #
-    # elif choice == "4. Warehouse Layout":
-    #     layout.display_wh_layout(DATAFILE_LOCATION)
-
-    # return
+    if action:
+        action()
 
 # ========= error handler is used to get correct google_drive_name ==================
 try:

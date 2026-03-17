@@ -41,8 +41,6 @@ def dashboard_container_loading(datafile_location):
                 f'<p style="font-family: Book Antiqua; color: {color_hex(306)}; text-align:left; font-size: 18px ;border-radius:1%;'
                 f' line-height:0em; margin-top:-5px"> {txt2} </p>',  unsafe_allow_html=True)
 
-            #st.write('Months Elapsed = ' + str(round(utils.get_month_elapsed(), 2)))
-
         with col1:      # display container loading and receiving status for 5-months =======================================
             txt = 'Incoming Container Details | YTD Total Containers: ' + str(container_this_year) + ' (' +str(container_per_month) + '/month) ' +\
                   ' | ' + utils.get_todays_date()
@@ -81,13 +79,11 @@ def dashboard_container_received(datafile_location):
     df_ccs.reset_index(drop=True, inplace=True)
     df_ccs.index = range(1, df_ccs.shape[0] + 1)
 
-    # st.write(df_ccs)
-
-    # ================= get ZEN Container Received Info =================================
-    df_zen = data.container_df(datafile_location)
+    # ================= get ZEN Received Containers Dataset =================================
+    values = data.container_df(datafile_location)
+    df_zen = values[1]  # received container dataset only
 
     df_zen = df_zen[['PO', 'BOL', 'STATE', 'RECEIVED DATE', 'LOCATION']]
-    df_zen = df_zen[df_zen['STATE'] == 'Received In Warehouse']     # keep only received containers
 
     df_zen = df_zen.drop_duplicates(subset=['PO'], keep='first')
     df_zen = df_zen[['PO', 'BOL', 'RECEIVED DATE', 'LOCATION']]
@@ -240,7 +236,8 @@ def dashboard_ccs_mts_eta_mismatch(datafile_location):
 def display_zen_mts_eta_mismatch(datafile_location, df_mts):
     # called from function "dashboard_ccs_mts_eta_mismatch()"
 
-    df = data.container_df(datafile_location)
+    values = data.container_df(datafile_location)
+    df = values[0]
 
     # remove Received POs
     df = df[df['STATE'] != 'Received In Warehouse']
