@@ -28,12 +28,11 @@ def ccs_df(datafile_location):
     df = df.replace(r'^\s*$', 'BLANK', regex=True)  # replace the SPACE in cell with 'BLANK'
     df = df[0:2000]
 
-    df = df.map(str)  # convert entire df to string for Streamlit
+    df = df.astype(str)  # convert entire df to string for Streamlit
     return df
 
 def container_df(datafile_location):
-    # file_path = Path(PureWindowsPath(datafile_location + "Inventory\\Container.csv"))
-    file_path = Path(datafile_location) / "Inventory" / "Container.csv"
+    file_path = Path(PureWindowsPath(datafile_location + "Inventory\\Container.csv"))
 
     # read .csv file, select columns and rename columns
     df = (
@@ -424,7 +423,7 @@ def wh_wise_inventory_df(datafile_location):
     return df_wh, df_wh1, df_wh2, df_wh3, df_wh4, df_parts, df_box, df_refurb, df_container, df_retail, retail_models, df_faucet, df_bathtub
 
 
-def sc_summary_df(datafile_location, supplier, model):
+def sc_summary_df_OLD(datafile_location, supplier, model):
 
     # ----------------- df_CCS for incoming containers only ---------------------------------------
     df_ccs = ccs_df(datafile_location)
@@ -479,7 +478,7 @@ def sc_summary_df(datafile_location, supplier, model):
     return df, df_summary
 
 
-def monthly_incoming_and_received_qty(datafile_location, supplier, model):
+def monthly_incoming_and_received_qty_OLD(datafile_location, supplier, model):
     first_day = datetime.today().replace(day=1)
     first_day = first_day.strftime("%Y-%m-%d")
 
@@ -1178,4 +1177,5 @@ def lowes_sales(datafile_location):
     AgGrid(df1, height=270)
     utils.download_csv(df1, 'Download')
     return
+
 

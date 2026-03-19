@@ -1,8 +1,7 @@
 import pandas as pd
 from pathlib import Path, PureWindowsPath
 import os
-from datetime import datetime
-from datetime import date
+from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 
 
@@ -440,7 +439,7 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
         st.plotly_chart(fig, width='stretch')
 
     # ====================== DISPLAY INVENTORY =======================================================================
-    col_m, col_n, col_o, col_p = st.columns([1, 1, 1, 0.1])
+    col_m, col_n, col_o, col_p = st.columns([1, 0.7, 1, 0.1])
     with col_m:
         txt = 'Warehouse Inventory Mix'
         st.markdown(
@@ -465,6 +464,8 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
             f'<p style="font-family: Book Antiqua; color: {color_hex(306)}; text-align:left; font-size: 18px ;border-radius:1%;'
             f' line-height:0em; margin-top:5px"> {txt} </p>', unsafe_allow_html=True)
 
+        df = weekly_container_arrival_df(datafile_location, supplier, model)
+
     # ==================== DISPLAY DOWNLOAD LINKS =====================================================
     col_w, col_x, col_y, col_z = st.columns([1, 1, 1, 1])
     with col_w:
@@ -485,7 +486,6 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
     # st.sidebar.write(f"Runtime: {end - start:.2f} seconds")  # show runtime seconds
 
     return
-
 
 def extend_to_four_months(month_list):
     # Convert strings to datetime
@@ -556,8 +556,6 @@ def container_loading_graph(datafile_location, supplier, model):
     df = df.fillna(0)
     df = df.sort_values('LOADING DATE', ascending=True)
 
-
-
     df['LOADING DATE'] = df['LOADING DATE'].dt.strftime('%b-%y')
 
     # always extend the 'LOADING DATE' to 4-months ================================
@@ -594,7 +592,7 @@ def container_loading_graph(datafile_location, supplier, model):
         text=df['RECEIVED'],
         textposition='inside',
         textfont=dict(size=11, family='Arial', color='black'),
-        marker=dict(color=color_hex(187)),  # line=dict(color=color_hex(153), width=3)),
+        marker=dict(color=color_hex(153)),  # line=dict(color=color_hex(153), width=3)),
         name="Received"
     ))
 
@@ -605,7 +603,7 @@ def container_loading_graph(datafile_location, supplier, model):
         text=df['OCEAN'] + df['RECEIVED'],
         textposition='inside',
         textfont=dict(size=11, family='Arial', color='black'),
-        marker=dict(color=color_hex(185)),   # line=dict(color=color_hex(21), width=3)),
+        marker=dict(color=color_hex(21)),   # line=dict(color=color_hex(21), width=3)),
         name="In Ocean"
     ))
 
@@ -620,7 +618,7 @@ def container_loading_graph(datafile_location, supplier, model):
     # position legend to top-right
     fig.update_layout(
         legend=dict(
-            x=0.80,
+            x=0.70,
             y=0.90
         )
     )
@@ -639,6 +637,91 @@ def container_loading_graph(datafile_location, supplier, model):
     # st.dataframe(df)
 
     return df_ocean_copy, df_received_copy
+
+def weekly_container_arrival_df(datafile_location, supplier, model):
+    # get sku and supplier list
+    df_product = data.product_df(datafile_location)[['SKU', 'SUPPLIER']]
+
+    values = data.container_df(datafile_location)
+
+    df_ocean = values[0]  # === process in-ocean containers =======================================================
+    df_ocean = pd.merge(df_ocean, df_product, on=["SKU"], how='left')[['PO', 'SKU', 'SUPPLIER', 'ODDO_ETA', 'QTY']]
+
+    exclude_prefixes = ('RVA', 'RBX', 'RDM', 'RVP')  # remove all accessories, packing boxes, dummy faucet & faucet parts
+    df_ocean = df_ocean[~df_ocean['SKU'].str.startswith(exclude_prefixes)]
+
+    df = utils.supplier_model_query(df_ocean, supplier, model)
+
+    # Ensure datetime
+    df['ODDO_ETA'] = pd.to_datetime(df['ODDO_ETA'])
+
+    # get first date of the df
+    today = pd.to_datetime(date.today())
+
+    if not df.empty:
+        start_date = min(df['ODDO_ETA'].iloc[0], today)
+    else:
+        start_date = today
+
+    # generate 8 x 7 = 56 dates from the first date if less
+    dates = [start_date + timedelta(days=i) for i in range(56)]
+
+    # create dataframe with 56 dates and merge with df
+    df_56 = pd.DataFrame({'ODDO_ETA': dates})
+    df = pd.merge(df_56, df, on=["ODDO_ETA"], how='left')
+    df = df.fillna(0)
+
+    # Create week-of-month
+    df['week_of_month'] = (df['ODDO_ETA'].dt.day - 1) // 7 + 1
+
+    df['month'] = df['ODDO_ETA'].dt.to_period('M')
+    df['month_week'] = df['month'].astype(str) + ' W' + df['week_of_month'].astype(str)
+
+    # st.write(df)
+
+    # split df
+    df_po = df[['PO', 'month_week']]
+    df_po = df_po[df['PO'] != 0]
+    df_po = df_po.drop_duplicates(subset='PO')
+    df_po = df_po.groupby('month_week')['PO'].count()
+    # st.write(df_po)
+
+    df_qty = df[['QTY', 'month_week']]
+    df_qty = df_qty.groupby('month_week', as_index=False)['QTY'].sum()
+
+    df_sum = pd.merge(df_qty, df_po, on=["month_week"], how='left')
+    df_sum['PO_QTY'] = df_sum['QTY'].astype(int).astype(str) + ' [' + df_sum['PO'].astype(str) + ']'
+    df_sum['PO_QTY'] = df_sum['PO_QTY'].str.replace('.0]', ']', regex=False)
+
+    # ================== create Plotly figure =================================
+    fig = go.Figure()
+
+    # received bars
+    fig.add_trace(go.Bar(
+        x=df_sum['month_week'],
+        y=df_sum['QTY'],
+        text=df_sum['PO_QTY'],
+        textposition='inside',
+        textfont=dict(size=11, family='Arial', color='black'),
+        marker=dict(color=color_hex(185)),  # line=dict(color=color_hex(153), width=3)),
+        name="Received"
+    ))
+
+    if all(y == 0 for y in df['QTY']):
+        fig.update_yaxes(range=[0, 1], dtick=1)  # force visible range
+    else:
+        fig.update_yaxes(range=[0, None])
+
+    fig.update_layout(height=290, margin=dict(l=0, r=0, b=0, t=0))
+
+    st.plotly_chart(fig, width='stretch')
+
+
+    utils.download_csv(df, 'download')
+    st.stop()
+
+    return
+
 
 def test():
     import streamlit as st
