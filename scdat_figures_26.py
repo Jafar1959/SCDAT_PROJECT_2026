@@ -503,84 +503,78 @@ def extend_to_four_months(month_list):
     # Convert back to required format and limit to 4
     return [d.strftime("%b-%y") for d in dates[:4]]
 
+def _container_loading_prep(df_raw, df_product, supplier, model, exclude_prefixes):
+    out = pd.merge(df_raw, df_product, on=["SKU"], how="left")[
+        ["PO", "SKU", "SUPPLIER", "LOADING DATE", "QTY"]
+    ]
+    out = out[~out["SKU"].str.startswith(exclude_prefixes, na=False)]
+    out = utils.supplier_model_query(out, supplier, model)
+    out["LOADING DATE"] = pd.to_datetime(out["LOADING DATE"]).dt.to_period("M")
+    return out
+
 def container_loading_graph(datafile_location, supplier, model):
 
     # st.write('Supplier:  ', supplier, ' Model: ', model)
 
-    # get sku and supplier list
+    exclude_prefixes = ('RVA', 'RBX', 'RDM', 'RVP')  # accessories, packing boxes, dummy faucet & faucet parts
+
     df_product = data.product_df(datafile_location)[['SKU', 'SUPPLIER']]
+    df_incoming, df_received_raw, _ = data.container_df(datafile_location)
 
-    values = data.container_df(datafile_location)
+    df_ocean = _container_loading_prep(df_incoming, df_product, supplier, model, exclude_prefixes)
+    df_ocean_copy = df_ocean.copy()
 
-    df_ocean = values[0]    # === process in-ocean containers =======================================================
-    df_ocean = pd.merge(df_ocean, df_product, on=["SKU"], how='left') [['PO', 'SKU', 'SUPPLIER', 'LOADING DATE', 'QTY']]
+    df_ocean = (
+        df_ocean.groupby("LOADING DATE", sort=False)["QTY"]
+        .sum()
+        .rename("OCEAN")
+        .reset_index()
+    )
 
-    exclude_prefixes = ('RVA', 'RBX', 'RDM', 'RVP')  # remove all accessories, packing boxes, dummy faucet & faucet parts
-    df_ocean = df_ocean[~df_ocean['SKU'].str.startswith(exclude_prefixes)]
+    ocean_month_periods = df_ocean["LOADING DATE"].unique()
 
-    df_ocean = utils.supplier_model_query(df_ocean, supplier, model)
+    df_received = _container_loading_prep(df_received_raw, df_product, supplier, model, exclude_prefixes)
+    df_received = df_received[df_received["LOADING DATE"].isin(ocean_month_periods)]
+    df_received_copy = df_received.copy()
 
-    df_ocean['LOADING DATE'] = pd.to_datetime(df_ocean['LOADING DATE']).dt.to_period('M')   # remove day from date
-    # df_ocean['LOADING DATE'] = df_ocean['LOADING DATE'].dt.to_period('M')  # remove day from date
+    df_received = (
+        df_received.groupby("LOADING DATE", sort=False)["QTY"]
+        .sum()
+        .rename("RECEIVED")
+        .reset_index()
+    )
 
-    df_ocean_copy = df_ocean.copy()     # keep copy for download
-
-    df_ocean = df_ocean.groupby('LOADING DATE', sort=False)['QTY'].sum().to_frame().reset_index()
-
-    df_ocean = df_ocean.rename(columns={'QTY': 'OCEAN'})
-
-    months = df_ocean['LOADING DATE'].tolist()      # get list of the loading months
-
-    df_received = values[1]     # === process received containers =======================================================
-    df_received = pd.merge(df_received, df_product, on=["SKU"], how='left') [['PO', 'SKU', 'SUPPLIER', 'LOADING DATE', 'QTY']]
-    # df_received = df_received[['PO', 'SKU', 'SUPPLIER', 'LOADING DATE', 'QTY']]
-
-    exclude_prefixes = ('RVA', 'RBX', 'RDM', 'RVP')  # remove all accessories, packing boxes, dummy faucet & faucet parts
-    df_received = df_received[~df_received['SKU'].str.startswith(exclude_prefixes)]
-
-    df_received = utils.supplier_model_query(df_received, supplier, model)
-
-    df_received['LOADING DATE'] = pd.to_datetime(df_received['LOADING DATE']).dt.to_period('M')  # remove day from date
-    # df_received['LOADING DATE'] = df_received['LOADING DATE'].dt.to_period('M')  # remove day from date
-
-    df_received = df_received[df_received['LOADING DATE'].isin(months)]
-
-    df_received_copy = df_received.copy()   # keep copy for download
-
-    df_received = df_received.groupby('LOADING DATE', sort=False)['QTY'].sum().to_frame().reset_index()
-
-    df_received = df_received.rename(columns={'QTY': 'RECEIVED'})
-
-    # merge in-ocean and received containers data ==================================================================
-    df = pd.merge(df_ocean, df_received, on=["LOADING DATE"], how='outer')
+    df = pd.merge(df_ocean, df_received, on=["LOADING DATE"], how="outer")
     df = df.fillna(0)
-    df = df.sort_values('LOADING DATE', ascending=True)
+    df = df.sort_values("LOADING DATE", ascending=True)
 
-    df['LOADING DATE'] = df['LOADING DATE'].dt.strftime('%b-%y')
+    df["LOADING DATE"] = df["LOADING DATE"].dt.strftime("%b-%y")
 
-    # always extend the 'LOADING DATE' to 4-months ================================
-    if len(df) == 0:    # if length 0, create one row datafile
+    if len(df) == 0:
         today = datetime.today()
         current_month = today.strftime("%b-%y")
-        df = pd.DataFrame({'LOADING DATE': [current_month],
-                                'OCEAN': [0],
-                                'RECEIVED': [0],
-                                })
+        df = pd.DataFrame(
+            {"LOADING DATE": [current_month], "OCEAN": [0], "RECEIVED": [0]}
+        )
 
-    df['LOADING DATE'] = df['LOADING DATE'].astype(str)
+    df["LOADING DATE"] = df["LOADING DATE"].astype(str)
 
-    months = df['LOADING DATE'].tolist()
-
-    months = extend_to_four_months(months)
-
-    months = months[len(df):]
-
-    for i in range(0, len(months)):
-        df_temp = pd.DataFrame({'LOADING DATE' : [months[i]],
-                            'OCEAN': [0],
-                            'RECEIVED': [0],
-                            })
-        df = pd.concat([df, df_temp], axis=0)
+    extended = extend_to_four_months(df["LOADING DATE"].tolist())
+    extra_labels = extended[len(df) :]
+    if extra_labels:
+        df = pd.concat(
+            [
+                df,
+                pd.DataFrame(
+                    {
+                        "LOADING DATE": extra_labels,
+                        "OCEAN": 0,
+                        "RECEIVED": 0,
+                    }
+                ),
+            ],
+            ignore_index=True,
+        )
 
     # ================== create Plotly figure =================================
     fig = go.Figure()
