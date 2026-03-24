@@ -134,7 +134,6 @@ def data_file_status(datafile_location):
     fig.update_layout(height=len(df)*35 + 35, margin=dict(l=0, r=0, b=0, t=0))
     return fig
 
-
 def container_dashboard(datafile_location):
 
     # get incoming containers from CCS =====================
@@ -240,7 +239,6 @@ def container_dashboard(datafile_location):
 
     return fig
 
-
 def monthly_container_loading(datafile_location):
 
     df_ccs = data.ccs_df(datafile_location)
@@ -298,7 +296,6 @@ def monthly_container_loading(datafile_location):
     fig.update_layout(height=len(df_monthly_group) * 36 + 34 + 7, margin=dict(l=0, r=0, b=0, t=0))
 
     return fig, total_container
-
 
 def sales_trend_graph(datafile_location, supplier, forecast_month):
 
@@ -393,7 +390,7 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
                              text=df_loading['QTY'],
                              textposition='inside',
                              textfont=dict(size=11, family='Arial', color='black'),
-                             marker=dict(color=color_hex(21), line=dict(color=color_hex(33), width=3)),
+                             marker=dict(color=color_hex(21), line=dict(color=color_hex(33), width=1)),
                              name="QTY LOADED",
                              ))
 
@@ -403,7 +400,7 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
                              text=df_received['QTY'],
                              textposition='inside',
                              textfont=dict(size=11, family='Arial', color='black'),
-                             marker=dict(color=color_hex(153), line=dict(color=color_hex(96), width=3)),
+                             marker=dict(color=color_hex(153), line=dict(color=color_hex(96), width=1)),
                              name="QTY RECEIVED",
                                  ))
 
@@ -430,7 +427,7 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
              f'line-height:0em; margin-top:-10px"> {txt[i]} </p>', unsafe_allow_html=True)
 
     # ==================== DISPLAY SALES, SHIPMENT, RECEIVED FIGURES =====================================================
-    col1, col2 = st.columns([3, 0.4])
+    col1, col2 = st.columns([3, 0.15])
     with col1:
 
         fig.update_layout(legend=dict(title_font_family="Book Antiqua", font=dict(size=13), x=0.1, y=0.9))
@@ -514,14 +511,12 @@ def _container_loading_prep(df_raw, df_product, supplier, model, exclude_prefixe
 
 def container_loading_graph(datafile_location, supplier, model):
 
-    # st.write('Supplier:  ', supplier, ' Model: ', model)
-
     exclude_prefixes = ('RVA', 'RBX', 'RDM', 'RVP')  # accessories, packing boxes, dummy faucet & faucet parts
 
     df_product = data.product_df(datafile_location)[['SKU', 'SUPPLIER']]
     df_incoming, df_received_raw, _ = data.container_df(datafile_location)
 
-    df_ocean = _container_loading_prep(df_incoming, df_product, supplier, model, exclude_prefixes)
+    df_ocean = _container_loading_prep(df_incoming, df_product, supplier, model, exclude_prefixes)  # filter datafile
     df_ocean_copy = df_ocean.copy()
 
     df_ocean = (
@@ -533,7 +528,7 @@ def container_loading_graph(datafile_location, supplier, model):
 
     ocean_month_periods = df_ocean["LOADING DATE"].unique()
 
-    df_received = _container_loading_prep(df_received_raw, df_product, supplier, model, exclude_prefixes)
+    df_received = _container_loading_prep(df_received_raw, df_product, supplier, model, exclude_prefixes)   # filter datafile
     df_received = df_received[df_received["LOADING DATE"].isin(ocean_month_periods)]
     df_received_copy = df_received.copy()
 
@@ -586,7 +581,7 @@ def container_loading_graph(datafile_location, supplier, model):
         text=df['RECEIVED'],
         textposition='inside',
         textfont=dict(size=11, family='Arial', color='black'),
-        marker=dict(color=color_hex(153)),  # line=dict(color=color_hex(153), width=3)),
+        marker=dict(color=color_hex(153), line=dict(color=color_hex(154), width=1)),
         name="Received"
     ))
 
@@ -597,7 +592,7 @@ def container_loading_graph(datafile_location, supplier, model):
         text=df['OCEAN'] + df['RECEIVED'],
         textposition='inside',
         textfont=dict(size=11, family='Arial', color='black'),
-        marker=dict(color=color_hex(21)),   # line=dict(color=color_hex(21), width=3)),
+        marker=dict(color=color_hex(21), line=dict(color=color_hex(154), width=1)),
         name="In Ocean"
     ))
 
@@ -697,8 +692,8 @@ def weekly_container_arrival_df(datafile_location, supplier, model):
         text=df_sum['PO_QTY'],
         textposition='inside',
         textfont=dict(size=11, family='Arial', color='black'),
-        marker=dict(color=color_hex(185)),  # line=dict(color=color_hex(153), width=3)),
-        name="Received"
+        marker=dict(color=color_hex(190), line=dict(color=color_hex(187), width=1)),
+        #name="Received"
     ))
 
     if all(y == 0 for y in df['QTY']):
