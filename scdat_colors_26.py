@@ -11,7 +11,7 @@ base_dir = os.path.dirname(os.path.abspath(__file__))
 # Define the file path
 file_path = os.path.join(base_dir, 'scdat_color_chart.xlsx')
 
-def color_hex(color_no):
+def color_hex(color_no)
     df = pd.read_excel(file_path, sheet_name='Color')
     df = df[['Color', 'Color Name', 'Color RGB', 'Color HEX']]
     df = df[df['Color'] == color_no]
@@ -20,6 +20,7 @@ def color_hex(color_no):
     return hex1
 
 def color_rgb(color_no):
+#fsbjfbsdhbfdhbfdhbdfhbf
     df = pd.read_excel(file_path, sheet_name='Color')
     df = df[['Color', 'Color Name', 'Color RGB', 'Color HEX']]
     df = df[df['Color'] == color_no]
