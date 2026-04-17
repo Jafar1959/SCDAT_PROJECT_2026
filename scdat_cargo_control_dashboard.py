@@ -19,7 +19,7 @@ def dashboard_container_loading(datafile_location):
 
     with st.spinner('Loading...'):  # show spinner
 
-        col1, col2, col3 = st.columns([4.1, 0.8, 0.1])
+        col1, col2, col3 = st.columns([4.2, 0.8, 0.1])
 
         with col2:  # display monthly container loading =================================
             values = fg.monthly_container_loading(datafile_location)

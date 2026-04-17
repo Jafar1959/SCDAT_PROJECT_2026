@@ -25,7 +25,7 @@ def get_file_date(path):
     time1 = dt.time()
     return date1, time1
 
-def data_file_status(datafile_location):
+def data_file_status_OLD(datafile_location):
     # ================= return a plotly table with data file status =================================
     # get current month number, short month name and year
     today = datetime.now().date()
@@ -34,10 +34,12 @@ def data_file_status(datafile_location):
     current_year = today.year   # int
 
     # convert month number to two digit - '01', '02' ----------
-    month_no_str = '0' + str(current_month_no) if current_month_no < 10 else str(current_month_no)
+    # month_no_str = '0' + str(current_month_no) if current_month_no < 10 else str(current_month_no)
+    month_no_str = f"{current_month_no:02d}"
 
     # define file path --------------------
-    file_prefix = str(current_year) + '_' + month_no_str + '_'
+    # file_prefix = str(current_year) + '_' + month_no_str + '_'
+    file_prefix = f"{current_year}_{month_no_str}_"
 
     file_paths = ['CCS\\CCS_Copy.xlsx',
                   # 'CCS\\Entry_Summary.csv',
@@ -134,6 +136,124 @@ def data_file_status(datafile_location):
     fig.update_layout(height=len(df)*35 + 35, margin=dict(l=0, r=0, b=0, t=0))
     return fig
 
+def data_file_status(datafile_location):
+    today = datetime.now().date()
+    current_month_no = today.month
+    short_month_name = calendar.month_abbr[current_month_no]
+    current_year = today.year
+
+    month_no_str = f"{current_month_no:02d}"
+    file_prefix = f"{current_year}_{month_no_str}_"
+
+    file_paths = [
+        'CCS\\CCS_Copy.xlsx',
+        'CCS\\Shipment_Report.xlsx',
+        'Inventory\\Container.csv',
+        'Inventory\\Inventory.csv',
+        'Inventory\\FBA_Inventory.csv',
+        'Inventory\\WH_Inventory_Qty.csv',
+        'Inventory\\Inventory_History.xlsx',
+        'Inventory\\Backorder.csv',
+        'Inventory\\ZEN_Purchase_Order.csv',
+        'Inventory\\Returns.csv',
+        'Inventory\\Return SCAN responses.xlsx',
+        f'Amazon\\{file_prefix}Amazon.csv',
+        f'Oddo\\{file_prefix}Oddo.csv',
+        f"Sales\\Monthly_Sales\\MONTHLY\\{str(current_year)[2:]}{month_no_str}_Sales_{short_month_name}-{str(current_year)[2:]}.csv",
+        'Sales\\Monthly_Sales\\Dealers_Order.csv',
+        "LOWES\\Lowe's Sales.xlsx",
+    ]
+
+    rows = []
+
+    for path_str in file_paths:
+
+        # Split path to extract folder and file name
+        parts = path_str.split('\\')
+        folder = parts[0]
+
+        # Handle nested folder structure (Monthly_Sales case)
+        if 'Monthly_Sales' in parts:
+            file = parts[-1]  # always take last part as file name
+        else:
+            file = parts[1]
+
+        # Build full file path using Windows-style path handling
+        full_path = Path(PureWindowsPath(datafile_location + path_str))
+
+        # Get file's last modified date and time
+        date1, time1 = get_file_date(full_path)
+
+        # Format time (HH:MM)
+        time_str = str(time1)[:5]
+
+        # Convert date to string
+        date_str = str(date1)
+
+        # Calculate how many days old the file is
+        delta_days = (today - date1).days
+
+        # Create status text (only if file is older than today)
+        status = f"{delta_days} day{'s' if delta_days != 1 else ''} old" if delta_days > 0 else ""
+
+        # Append row data
+        rows.append({
+            'Folder': folder,
+            'File Name': file,
+            'Date': date_str,
+            'Time': time_str,
+            'Status': status
+        })
+
+    # Create DataFrame
+    df = pd.DataFrame(rows)
+
+    # alternating row colors (vectorized, faster)
+    df['Color'] = ['rgb(245, 255, 250)' if i % 2 == 0 else 'rgb(224, 238, 224)' for i in range(len(df))]
+
+    # Create Plotly table
+    fig = go.Figure(data=[go.Table(
+        columnwidth=[14, 30, 15, 15, 15],
+
+        # Table header styling
+        header=dict(
+            values=df.columns[:5],
+            fill_color=color_hex(196),
+            line_color='white',
+            font_color='black',
+            font_size=16,
+            height=35,
+            align=['left', 'left', 'center', 'center', 'center']
+        ),
+
+        # Table cell styling and data
+        cells=dict(
+            values=[df[col] for col in df.columns[:5]],
+            font_size=14,
+            height=35,
+            fill_color=[df['Color']],
+            line_color='white',
+            align=['left', 'left', 'center', 'center', 'left']
+        )
+    )])
+
+    # Add outer border around the table
+    fig.add_shape(
+        type="rect",
+        xref="paper", yref="paper",
+        x0=0, y0=0, x1=1, y1=1,
+        line=dict(color=color_hex(32), width=3),
+        layer="above"
+    )
+
+    # Adjust layout height dynamically based on number of rows
+    fig.update_layout(
+        height=len(df) * 35 + 35,
+        margin=dict(l=0, r=0, b=0, t=0)
+    )
+
+    return fig
+
 def container_dashboard(datafile_location):
 
     # get incoming containers from CCS =====================
@@ -214,7 +334,7 @@ def container_dashboard(datafile_location):
     df2['In-Ocean Container'] = df2['In-Ocean Container'].replace(0, '')        # replace zero by ''
 
     fig = go.Figure(data=[go.Table(
-        columnwidth=[18] + [15]*10,
+        columnwidth=[18] + [14]*10,
 
         header=dict(values=df2.columns,
                     fill_color=[color_hex(135)] + [color_hex(60)]*4 + [color_hex(46)]*2 +[color_hex(113)]*2 + [color_hex(60)]*2 + [color_hex(238)]
@@ -299,10 +419,28 @@ def monthly_container_loading(datafile_location):
 
 def sales_trend_graph(datafile_location, supplier, forecast_month):
 
-    # start = time.perf_counter()  # start runtime counter
-
     # ============== CREATE CHOICES ======================
-    number_of_months_in_display = st.sidebar.number_input("MONTHS IN DISPLAY", min_value=6, max_value=24, value=13)
+    # create 36-months name list,start from the previous month
+    start = datetime.now() - relativedelta(months=1)
+
+    months = [
+        (start - relativedelta(months=i)).strftime("%b-%y")
+        for i in range(36)
+    ]
+
+    # Reverse to oldest → newest
+    months = months[::-1]
+
+    start_month = st.sidebar.selectbox("MONTH START", months, index=len(months)-13)
+    end_month = st.sidebar.selectbox("MONTH END", months, index=len(months)-1)
+
+    start_index = months.index(start_month)
+    end_index = months.index(end_month)
+
+    month_list = months[start_index: end_index + 1]
+
+    # st.write(month_list)
+    # number_of_months_in_display = st.sidebar.number_input("MONTHS IN DISPLAY", min_value=6, max_value=24, value=13)
 
     supplier = st.sidebar.selectbox("SUPPLIER", supplier)
 
@@ -315,23 +453,28 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
     show_received = st.sidebar.checkbox('SHOW RECEIVED', value=True)
 
     # get months list - start from previous month ============================
-    start = datetime.now() - relativedelta(months=1)
+    # start = datetime.now() - relativedelta(months=1)
+    #
+    # month_list = [
+    #     (start - relativedelta(months=i)).strftime("%b-%y")
+    #     for i in range(number_of_months_in_display)
+    #              ]
+    #
+    # # sort the months list by keeping the month order
+    # month_list = sorted(
+    #     month_list,
+    #     key=lambda x: datetime.strptime(x, "%b-%y")
+    #                    )
+    #
+    # st.write(month_list)
 
-    month_list = [
-        (start - relativedelta(months=i)).strftime("%b-%y")
-        for i in range(number_of_months_in_display)
-                 ]
+    # get sales data Summary [MONTH, SALES] and Sales by SKU [SKU, SUPPLIER, AMAZON, ODDO, TOTAL, MONTH] based on month_list =======================
+    # df_sales_summary, df_sales_sku = data.sales_trend_df(datafile_location, supplier, model, month_list)
+    df_sales_summary, df_sales_sku = data.sales_trend_df(datafile_location, supplier, model, months)
 
-    # sort the months list by keeping the month order
-    month_list = sorted(
-        month_list,
-        key=lambda x: datetime.strptime(x, "%b-%y")
-                       )
-    # get sales data based on month_list ============================================
+    df_sales_summary = df_sales_summary[df_sales_summary['MONTH'].isin(month_list)]
 
-    values = data.sales_trend_df(datafile_location, supplier, model, month_list)
-    df_sales_summary = values[0]     # [ MONTH, SALES]
-    df_sales_sku = values[1]         # [SKU, SUPPLIER, AMAZON, ODDO, TOTAL, MONTH]
+    # st.write(df_sales_summary)
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=df_sales_summary['MONTH'],
@@ -339,6 +482,13 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
                              mode='lines',
                              line={'dash': 'solid', 'color': 'darkred'},
                              name="SALES",
+                             ))
+
+    fig.add_trace(go.Scatter(x=df_sales_summary['MONTH'],
+                             y=df_sales_summary['12M_AVG'],
+                             mode='lines',
+                             line={'dash': 'solid', 'color': 'blue'},
+                             name="12M RUNNING AVG",
                              ))
 
     # get forecast data ===============================================================================
@@ -360,7 +510,7 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
                                  # fill='tozeroy',  # fill down to xaxis
                                  fillcolor='rgba(240, 128, 128, 0.2)',
                                  mode='lines',
-                                 line={'dash': 'solid', 'color': 'grey'},
+                                 line={'dash': 'dash', 'color': 'grey'},
                                  name="FORECAST"))
 
     y_axis_max = max([df_sales_summary['SALES'].max(), df_forecast_summary['FORECAST'].max()])      # get max value for y-axis
@@ -369,19 +519,19 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
 
     average_sales = round(df_sales_summary['SALES'].sum() / len(df_sales_summary), 0)
 
-    fig.add_hline(y=average_sales, line_width=1, line_dash='solid',
-                  # annotation_text=str(len(df_sales)) + '-MONTH AVG. SALES | ' + utils.format_num(str(average_sales)),
-                  # annotation_font_size=14,
-                  # annotation_font_color=color_hex(140),
-                  line_color=color_hex(56))
+    # fig.add_hline(y=average_sales, line_width=1, line_dash='solid',
+    #               # annotation_text=str(len(df_sales)) + '-MONTH AVG. SALES | ' + utils.format_num(str(average_sales)),
+    #               # annotation_font_size=14,
+    #               # annotation_font_color=color_hex(140),
+    #               line_color=color_hex(56))
 
     # get loading and received data ===================================================================
-    values2 = data.loading_trend_df(datafile_location, supplier, model, month_list)
+    df_loading, df_received = data.loading_trend_df(datafile_location, supplier, model, month_list)
 
-    df_loading = values2[0]
+    # df_loading = values2[0]
     average_loading = round(df_loading['QTY'].sum() / len(df_sales_summary), 0)
 
-    df_received = values2[1]
+    # df_received = values2[1]
     average_received = round(df_received['QTY'].sum() / len(df_sales_summary), 0)
 
     if show_loading:
@@ -408,23 +558,44 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
 
     fig.update_yaxes(range=[0, y_axis_max])
 
-    # ====================== CREATE SUB HEADER ========================
+    # --------------------- CREATE SUB HEADERS ------------------------------------------------------------------------
     col_a, col_b, col_c, col_d, col_e, col_f = st.columns([1, 1, 1, 1, 1, 0.18])
     color = [color_hex(19), color_hex(19), color_hex(56), color_hex(35), color_hex(96)]
-    font = '20px'
+    font = '18px'
     cols = [col_a, col_b, col_c, col_d, col_e, col_f]
     txt = [ 'MODEL: ' + model.upper(),
             'TOTAL SKU: ' + utils.format_num(str(total_sku)),
-            'AVG. SALES | ' + utils.format_num(str(average_sales)),
-            'AVG. SHIPMENT | ' + utils.format_num(str(average_loading)),
-            'AVG. RECEIVED | ' + utils.format_num(str(average_received))
+            str(len(df_sales_summary)) + 'M AVG. SALES: ' + utils.format_num(str(average_sales)),
+            'AVG. SHIPMENT: ' + utils.format_num(str(average_loading)),
+            'AVG. RECEIVED: ' + utils.format_num(str(average_received)),
              ]
 
     for i in range (0, len(cols)-1):
         with cols[i]:
+            # st.markdown(
+            #  f'<p style="border:1px solid #CFCFCF; padding:10px; border-radius:8px; font-family: Arial Bold; color: {color[i]}; '
+            #  f'text-align:center; font-size: {font} ;border-radius:2%; '
+            #  f'line-height:0em; margin-top:-15px"> {txt[i]} </p>', unsafe_allow_html=True)
+
             st.markdown(
-             f'<p style="font-family: Arial Bold; color: {color[i]}; text-align:left; font-size: {font} ;border-radius:2%; '
-             f'line-height:0em; margin-top:-10px"> {txt[i]} </p>', unsafe_allow_html=True)
+                f"""
+                <div style="
+                    display:inline-block;
+                    border:1px solid #CFCFCF;
+                    padding:2px 6px;
+                    border-radius:12px;
+                    font-family: Arial Bold;
+                    color:{color[i]};
+                    text-align:center;
+                    font-size:{font};            
+                    margin:0;
+                    margin-top:-15px;
+                ">
+                    {txt[i]}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
     # ==================== DISPLAY SALES, SHIPMENT, RECEIVED FIGURES =====================================================
     col1, col2 = st.columns([3, 0.15])
@@ -435,9 +606,10 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
 
         st.plotly_chart(fig, width='stretch')
 
-    # ====================== DISPLAY INVENTORY =======================================================================
-    col_m, col_n, col_o, col_p = st.columns([1, 0.7, 1, 0.1])
-    with col_m:
+    # ====================== DISPLAY INVENTORY, IN-OCEAN & WEEKLY ARRIVAL =======================================================================
+    # col_m, col_n, col_o, col_p = st.columns([1, 0.7, 1, 0.1])
+    col3, col4, col5, col6 = st.columns([1, 0.7, 1, 0.1])
+    with col3:
         txt = 'Warehouse Inventory Mix'
         st.markdown(
             f'<p style="font-family: Book Antiqua; color: {color_hex(306)}; text-align:left; font-size: 18px ;border-radius:1%;'
@@ -445,7 +617,7 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
 
         sfd.inventory_dashboard(datafile_location, forecast_month, supplier, model)
 
-    with col_n:
+    with col4:
         txt = 'In-ocean & Received Quantity'
         st.markdown(
             f'<p style="font-family: Book Antiqua; color: {color_hex(306)}; text-align:left; font-size: 18px ;border-radius:1%;'
@@ -453,15 +625,89 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
 
         values = container_loading_graph(datafile_location, supplier, model)
         df_ocean = values[0]
+
+        # st.write(df_ocean)
+        # utils.download_csv(df_ocean, 'df_ocean')
+
         df_received = values[1]
 
-    with col_o:
+    with col5:
+
+        fig, fig1 = weekly_container_arrival_chart(datafile_location, supplier, model)
+
         txt = 'Weekly Container Arrival'
         st.markdown(
             f'<p style="font-family: Book Antiqua; color: {color_hex(306)}; text-align:left; font-size: 18px ;border-radius:1%;'
             f' line-height:0em; margin-top:5px"> {txt} </p>', unsafe_allow_html=True)
 
-        df = weekly_container_arrival_df(datafile_location, supplier, model)
+        st.plotly_chart(fig, width='stretch')
+
+    utils.show_header(supplier)
+
+    col7, col8, col9, col10 = st.columns([1, 0.7, 1, 0.1])
+
+    with col7:
+        df_low, _ = data.low_inventory_df(datafile_location, forecast_month, supplier, model)
+        # st.write(df_low)
+
+        df_low.columns = [str(col) for col in df_low.columns]   # convert column heading to str
+        cols = df_low.columns
+
+        # st.write(cols)
+        # add row colors
+        df_low['bg_color'] = ['rgb(255, 255, 255)' if i % 2 == 0 else 'rgb(255, 228, 196)' for i in range(len(df_low))]
+
+        fig = go.Figure(data=[go.Table(
+            columnwidth=[16, 14],
+            header=dict(values=cols, #df_low.columns,
+                        fill_color=[color_hex(135)],
+                        line_color='white',
+                        font_color='white',
+                        font_size=14,
+                        height=30,
+                        align=['left', 'center']),
+            cells=dict(
+                values=[df_low[col] for col in cols],
+                font_size=14,
+                height=30,
+                # font_color=[df_monthly_group.font_color],
+                fill_color=[df_low.bg_color],
+                # line_color='white',
+                align=['left', 'center']))
+        ])
+
+        fig.update_layout(height=500, margin=dict(l=0, r=0, b=0, t=0))
+
+    with col7:
+        txt = 'Inventory < 1 Month Forecast | Total SKU: ' + str(len(df_low))
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(
+            f'<p style="font-family: Book Antiqua; color: {color_hex(306)}; text-align:left; font-size: 18px ;border-radius:1%;'
+            f' line-height:0em; margin-top:25px"> {txt} </p>', unsafe_allow_html=True)
+
+        st.plotly_chart(fig, width='stretch')
+
+        utils.download_csv(df_low, 'Download Low')
+
+    with col8:
+        txt = 'Container Arrival Schedule'
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(
+                f'<p style="font-family: Book Antiqua; color: {color_hex(306)}; text-align:left; font-size: 18px ;border-radius:1%;'
+                f' line-height:0em; margin-top:25px"> {txt} </p>', unsafe_allow_html=True)
+
+        st.plotly_chart(fig1, width='stretch')
+
+
+    with col9:
+        txt = 'Weekly Inventory Projection'
+        st.markdown(
+            f'<p style="font-family: Book Antiqua; color: {color_hex(306)}; text-align:left; font-size: 18px ;border-radius:1%;'
+            f' line-height:0em; margin-top:25px"> {txt} </p>', unsafe_allow_html=True)
+
+        inventory_level_projection_graph(datafile_location, supplier, model)
+
+
 
     # ==================== DISPLAY DOWNLOAD LINKS =====================================================
     col_w, col_x, col_y, col_z = st.columns([1, 1, 1, 1])
@@ -501,13 +747,15 @@ def extend_to_four_months(month_list):
     return [d.strftime("%b-%y") for d in dates[:4]]
 
 def _container_loading_prep(df_raw, df_product, supplier, model, exclude_prefixes):
-    out = pd.merge(df_raw, df_product, on=["SKU"], how="left")[
+    df = pd.merge(df_raw, df_product, on=["SKU"], how="left")[
         ["PO", "SKU", "SUPPLIER", "LOADING DATE", "QTY"]
     ]
-    out = out[~out["SKU"].str.startswith(exclude_prefixes, na=False)]
-    out = utils.supplier_model_query(out, supplier, model)
-    out["LOADING DATE"] = pd.to_datetime(out["LOADING DATE"]).dt.to_period("M")
-    return out
+
+    df = utils.exclude_sku_prefixes(df, exclude_prefixes)
+
+    df = utils.supplier_model_query(df, supplier, model)
+    df["LOADING DATE"] = pd.to_datetime(df["LOADING DATE"]).dt.to_period("M")
+    return df
 
 def container_loading_graph(datafile_location, supplier, model):
 
@@ -617,7 +865,7 @@ def container_loading_graph(datafile_location, supplier, model):
     else:
         fig.update_yaxes(range=[0, None])
 
-    fig.update_layout(height=290, margin=dict(l=0, r=0, b=0, t=0))
+    fig.update_layout(height=315, margin=dict(l=0, r=0, b=0, t=0))
 
     st.plotly_chart(fig, width='stretch')
 
@@ -627,60 +875,13 @@ def container_loading_graph(datafile_location, supplier, model):
 
     return df_ocean_copy, df_received_copy
 
-def weekly_container_arrival_df(datafile_location, supplier, model):
-    # get sku and supplier list
-    df_product = data.product_df(datafile_location)[['SKU', 'SUPPLIER']]
+def weekly_container_arrival_chart(datafile_location, supplier, model):
 
-    values = data.container_df(datafile_location)
-
-    df_ocean = values[0]  # === process in-ocean containers =======================================================
-    df_ocean = pd.merge(df_ocean, df_product, on=["SKU"], how='left')[['PO', 'SKU', 'SUPPLIER', 'ODDO_ETA', 'QTY']]
-
-    exclude_prefixes = ('RVA', 'RBX', 'RDM', 'RVP')  # remove all accessories, packing boxes, dummy faucet & faucet parts
-    df_ocean = df_ocean[~df_ocean['SKU'].str.startswith(exclude_prefixes)]
-
-    df = utils.supplier_model_query(df_ocean, supplier, model)
-
-    # Ensure datetime
-    df['ODDO_ETA'] = pd.to_datetime(df['ODDO_ETA'])
-
-    # get first date of the df
-    today = pd.to_datetime(date.today())
-
-    if not df.empty:
-        start_date = min(df['ODDO_ETA'].iloc[0], today)
-    else:
-        start_date = today
-
-    # generate 8 x 7 = 56 dates from the first date if less
-    dates = [start_date + timedelta(days=i) for i in range(56)]
-
-    # create dataframe with 56 dates and merge with df
-    df_56 = pd.DataFrame({'ODDO_ETA': dates})
-    df = pd.merge(df_56, df, on=["ODDO_ETA"], how='left')
-    df = df.fillna(0)
-
-    # Create week-of-month
-    df['week_of_month'] = (df['ODDO_ETA'].dt.day - 1) // 7 + 1
-
-    df['month'] = df['ODDO_ETA'].dt.to_period('M')
-    df['month_week'] = df['month'].astype(str) + ' W' + df['week_of_month'].astype(str)
+    # unpack data
+    df, df_sum = data.weekly_container_arrival_df(datafile_location, supplier, model)
 
     # st.write(df)
-
-    # split df
-    df_po = df[['PO', 'month_week']]
-    df_po = df_po[df['PO'] != 0]
-    df_po = df_po.drop_duplicates(subset='PO')
-    df_po = df_po.groupby('month_week')['PO'].count()
-    # st.write(df_po)
-
-    df_qty = df[['QTY', 'month_week']]
-    df_qty = df_qty.groupby('month_week', as_index=False)['QTY'].sum()
-
-    df_sum = pd.merge(df_qty, df_po, on=["month_week"], how='left')
-    df_sum['PO_QTY'] = df_sum['QTY'].astype(int).astype(str) + ' [' + df_sum['PO'].astype(str) + ']'
-    df_sum['PO_QTY'] = df_sum['PO_QTY'].str.replace('.0]', ']', regex=False)
+    # utils.download_csv(df, "DLLLL")
 
     # ================== create Plotly figure =================================
     fig = go.Figure()
@@ -701,15 +902,219 @@ def weekly_container_arrival_df(datafile_location, supplier, model):
     else:
         fig.update_yaxes(range=[0, None])
 
-    fig.update_layout(height=290, margin=dict(l=0, r=0, b=0, t=0))
+    fig.update_layout(height=344, margin=dict(l=0, r=0, b=0, t=0))
 
+    # st.plotly_chart(fig, width='stretch')
+
+
+    # -------------------- Incoming Container Chart -----------------
+
+    df_filtered = df[df['PO'] != 0].copy()
+
+    # st.write(df)
+
+    # 2. Convert date (optional but recommended)
+    df_filtered['ODDO_ETA'] = pd.to_datetime(df_filtered['ODDO_ETA'])
+
+    # 3. Group and aggregate
+    df_summary = (
+        df_filtered
+        .groupby(['ODDO_ETA', 'PO'], as_index=False)['QTY']
+        .sum()
+    )
+
+    # 4. Format date only (no time)
+    df_summary['ODDO_ETA'] = df_summary['ODDO_ETA'].dt.strftime('%Y-%m-%d')
+
+    # 5. Create Plotly table
+    fig1 = go.Figure(data=[go.Table(
+        header=dict(
+            values=['DATE', 'PO', 'TOTAL QTY'],
+            fill_color=[color_hex(97)],
+            line_color='white',
+            font_color='white',
+            font_size=14,
+            height=30,
+            align='center',
+                ),
+
+        cells=dict(
+            values=[
+                df_summary['ODDO_ETA'],
+                df_summary['PO'],
+                df_summary['QTY']
+            ],
+            font_size=14,
+            height=30,
+
+            fill_color=[['white', '#f2f2f2'] * (len(df_summary) // 2 + 1)],
+            align='center'
+        )
+    )])
+
+    fig1.update_layout(height=500, margin=dict(l=0, r=0, b=0, t=0))
+
+    # st.plotly_chart(fig1, width='stretch')
+
+    return fig, fig1
+
+def inventory_level_projection_graph(datafile_location, supplier, model):   #df, supplier, avg_sales_per_week, current_month_sales):
+    supplier_limits = {
+        'ALL': 50000,
+        'Aquacubic': 2500,
+        'Bomeijia': 600,
+        'Carysil': 150,
+        'Changie': 300,
+        'Elleci': 5000,
+        'Galassia': 500,
+        'Nicos': 250,
+        'Plados': 300,
+        'Speed': 30000,
+        'Speed Vietnam': 9000,
+        'Stile Libero': 1250,
+        'UAE Fireclay': 250,
+        'Wisdom': 70,
+        'Xindeli': 2000,
+        'Yalos': 100,
+        'Huayi': 1000,
+        'CAE Sanitary': 400
+    }
+
+    h_line = supplier_limits.get(supplier, 0)
+
+    prefixes = ('RVA', 'RBX', 'RDM', 'RVP')     # accessories, boxes, dummy faucets, faucet parts
+
+    df_inventory = data.inventory_df(datafile_location)[['SKU', 'SUPPLIER', 'Existing Qty']]
+    df_inventory = utils.supplier_model_query(df_inventory, supplier, model)
+
+    df_inventory = utils.exclude_sku_prefixes(df_inventory, prefixes)
+
+    total_inventory = df_inventory['Existing Qty'].sum()
+
+
+    df, df_sum = data.weekly_container_arrival_df(datafile_location, supplier, model)
+    df_sum = df_sum[['month_week', 'QTY']]
+    qty_arr = df_sum['QTY'].tolist()
+
+    # st.write(df_sum)
+    # st.write(qty_arr)
+    # st.stop()
+
+    df_30d_sale = data.last_30_days_sales_df(datafile_location, supplier, model)
+
+    df_30d_sale = utils.exclude_sku_prefixes(df_30d_sale, prefixes)
+
+    avg_weekly_sale = round(df_30d_sale['30_Day_Sale'].sum() * 7/30, 2)
+
+    # st.write(df_30d_sale)
+    # st.write(avg_weekly_sale)
+    # st.stop()
+
+    inventory_level: list = [round(total_inventory, 2)]
+
+    for i in range(0, len(qty_arr)):
+        qty_new =round(inventory_level[i] + qty_arr[i] - avg_weekly_sale, 2)
+        if qty_new < 0:
+            qty_new = 0
+        inventory_level.append(qty_new)
+
+    inventory_level.pop()   # remove last value of the list
+
+    # st.write(inventory_level)
+
+    df_sum['inventory_level'] = inventory_level
+
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=df_sum['month_week'],
+                             y=df_sum['inventory_level'],
+                             fill='tozeroy',  # fill down to xaxis
+                             fillcolor='rgba(100, 149, 237, 0.2)',
+                             mode='lines',
+                             line={'dash': 'solid', 'color': color_hex(10)},
+                             name=""
+                             ))
+
+    if model.upper() == 'ALL' and max(df_sum['inventory_level']) >= h_line:
+        fig.add_annotation(x=7, y=h_line,
+                       text='Max Inventory | ' + str(utils.format_num(h_line)),
+                       font=dict(size=14, family='Book Antiqua',
+                                 color=color_hex(10)),
+                       showarrow=False)
+
+    y = max(df_sum['inventory_level'])/2
+
+    fig.add_annotation(x=3, y=y * 0.9,  #h_line/1.6,
+                       text='Average Sales/Week: ' + str(utils.format_num(avg_weekly_sale)),
+                       font=dict(size=14, family='Book Antiqua', color='Maroon'),
+                       showarrow=False,
+                       align="left"
+                       )
+
+    # now = datetime.now()
+    # total_days = calendar.monthrange(now.year, now.month)[1]
+
+    fig.add_annotation(x=3, y=y * 0.7,
+                       text='Last 30 days Sales: ' + str(utils.format_num(round(avg_weekly_sale *30/7, 0))),
+                       font=dict(size=14, family='Book Antiqua', color='Maroon'),
+                       showarrow=False,
+                       align="left"
+                       )
+
+    # current_inventory = df.iloc[0, 1]
+    #
+    fig.add_annotation(x=3, y=y * 0.5,
+                       text='Stock: ' + str(round(total_inventory/avg_weekly_sale, 2)) + ' weeks',
+                       font=dict(size=14, family='Book Antiqua', color=color_hex(125)),
+                       showarrow=False,
+                       align = "left"
+                       )
+    #
+    fig.update_yaxes(gridwidth=2)
+    fig.update_xaxes(
+        # dtick="M1",  # sets minimal interval to month
+        # tickformat="%d-%b-%Y",  # "%b %Y",  # sets the date format
+        # tickangle=90,  # rotates the tick labels
+        # tickvals=df_sum['month_week'],
+        showgrid=True,
+        gridwidth=2,
+                    )
+
+    fig.update_layout(xaxis_title="", yaxis_title="Inventory",
+                      font=dict(
+                          family="Book Antiqua",
+                          size=15,
+                          color='black'),
+                      )
+    fig.update_layout(height=360, margin=dict(l=0, r=0, b=0, t=0))
     st.plotly_chart(fig, width='stretch')
+    # st.write(df_sum)
+
+    return fig
 
 
-    utils.download_csv(df, 'download')
-    st.stop()
+def inventory_level_projection_table_OLD(datafile_location, current_month, current_year, forecast_month, supplier, model):
+    values = data.inventory_level_projection_df(datafile_location, current_month, current_year, forecast_month, supplier, model)
+    df = values[0]
 
-    return
+    avg_sales_per_week = values[1]
+    wh_inventory = values[2]
+    current_month_sales = values[3]
+
+    df = df[['WEEK', 'PROJECTION']]
+    df = df.rename(columns={'WEEK': 'DATE'})
+    df['DATE'] = df.apply(lambda x: str(x.iloc[0])[7:13], axis=1)
+
+    now = datetime.now()
+    current_date = str(now)[5:7] + '/' + str(now)[8:10]
+
+    df1 = pd.DataFrame({'DATE': [current_date], 'PROJECTION': [wh_inventory]})
+
+    df = pd.concat([df1, df])
+
+    fig2 = inventory_level_projection_graph(df, supplier, avg_sales_per_week, current_month_sales)
+
+    return fig2, df
 
 
 def test():

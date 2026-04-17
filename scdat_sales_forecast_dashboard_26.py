@@ -13,105 +13,143 @@ import scdat_utils_26 as utils
 from scdat_colors_26 import color_hex
 
 def inventory_mix_df(datafile_location, forecast_month, supplier, model):
-    # --------------- WH INVENTORY ---------------------------
-    df_inventory = data.inventory_df(datafile_location)
-    df_inventory = df_inventory.loc[lambda row: ~ row['SKU'].str.startswith('RBX')]
-    df_inventory = df_inventory[['SKU', 'SUPPLIER', 'Existing Qty']]
-    df_inventory = df_inventory.rename(columns={'Existing Qty': 'WH_QTY'})
+    # --------------- LOAD INVENTORY DATA  ---------------------------
+    df_inventory = (data.inventory_df(datafile_location)[['SKU', 'SUPPLIER', 'Existing Qty']]
+                    .rename(columns={'Existing Qty': 'WH_QTY'})
+                    )
 
-    # --------------- FORECAST ---------------------------
-    df_forecast = data.forecast_df(datafile_location, forecast_month)
-    df_forecast = df_forecast[['SKU', 'FORECAST']]
+    # --------------- LOAD FORECAST DATA ---------------------------
+    df_forecast = data.forecast_df(datafile_location, forecast_month)[['SKU', 'FORECAST']]
 
-    df = pd.merge(df_forecast, df_inventory, on=["SKU"], how='left')    # merge forecast & inventory data
+    # ------------------- MERGE FORECAST & INVENTORY --------------
+    df = (
+        df_forecast
+        .merge(df_inventory, on='SKU', how='left')
+        .fillna({'WH_QTY': 0, 'FORECAST': 0})
+    )
 
-    df['MONTH'] = df['WH_QTY']/df['FORECAST']   # calculate WH stock in month
-    df = df.fillna(0)
-    df['MONTH'] = round(df['MONTH'], 2)
+    # ============ CALCULATE WH STOCK IN MONTH (Avoid divide-by-zero) ============================
+    df['MONTH'] = (df['WH_QTY'] / df['FORECAST'].replace(0, pd.NA)).fillna(0).round(2)
 
+    # =================== FILTER BY SUPPLIER, MODEL AND COLOR ===================================
     df = utils.supplier_model_query(df, supplier, model)    # query on supplier and model
 
-    df_sink = df.loc[lambda row: ~ row['SKU'].str.startswith('RVA')]
+    prefixes = ('RVA', 'RBX', 'RDM', 'RVP')  # accessories, boxes, dummy faucets, faucet parts
+    df_sink = utils.exclude_sku_prefixes(df, prefixes)
     df_accessories = df.loc[lambda row: row['SKU'].str.startswith('RVA')]
 
-    # all totals - accessories
-    total_sku_acc = df_accessories['SKU'].count()
-    # total_forecast_acc = df_accessories['FORECAST'].sum()
-    total_inventory_acc = df_accessories['WH_QTY'].sum()
-
-    # all totals - sinks
-    total_sku = df_sink['SKU'].count()
+    # ------------------ TOTALS --------------------------------------
+    total_sku = len(df_sink)
     total_forecast = df_sink['FORECAST'].sum()
     total_inventory = df_sink['WH_QTY'].sum()
 
-    # zero <= qty <= week
-    df_zero = df_sink[df_sink['MONTH'] <= 0.23]
-    sku_zero = df_zero['SKU'].count()
+    total_sku_acc = len(df_accessories)
+    total_inventory_acc = df_accessories['WH_QTY'].sum()
 
-    # week < qty < 1m
-    df_1m = df_sink[df_sink['MONTH'] > 0.23]
-    df_1m = df_1m[df_1m['MONTH'] <= 1]
-    sku_1m = df_1m['SKU'].count()
-    qty_1m = df_1m['WH_QTY'].sum()
+    sku_zero = (df_sink['MONTH'] <= 0.23).sum()     # create boolean field and get sum of the TRUE
 
-    # 1 < qty < 2m
-    df_2m = df_sink[df_sink['MONTH'] > 1]
-    df_2m = df_2m[df_2m['MONTH'] <= 2]
-    sku_2m = df_2m['SKU'].count()
-    qty_2m = df_2m['WH_QTY'].sum()
+    # --------------- week < qty < 1m -------------------
+    mask_1m = (df_sink['MONTH'] > 0.23) & (df_sink['MONTH'] <= 1)
+    sku_1m = mask_1m.sum()
+    qty_1m = df_sink.loc[mask_1m, 'WH_QTY'].sum()
 
-    # 2 < qty < 3m
-    df_3m = df_sink[df_sink['MONTH'] > 2]
-    df_3m = df_3m[df_3m['MONTH'] <= 3]
-    sku_3m = df_3m['SKU'].count()
-    qty_3m = df_3m['WH_QTY'].sum()
+    # --------------- 1m < qty < 2m -------------------
+    mask_2m = (df_sink['MONTH'] > 1) & (df_sink['MONTH'] <= 2)
+    sku_2m = mask_2m.sum()
+    qty_2m = df_sink.loc[mask_2m, 'WH_QTY'].sum()
 
-    # 3 < qty < 4m
-    df_4m = df_sink[df_sink['MONTH'] > 3]
-    df_4m = df_4m[df_4m['MONTH'] <= 4]
-    sku_4m = df_4m['SKU'].count()
-    qty_4m = df_4m['WH_QTY'].sum()
+    # --------------- 2m < qty < 3m -------------------
+    mask_3m = (df_sink['MONTH'] > 2) & (df_sink['MONTH'] <= 3)
+    sku_3m = mask_3m.sum()
+    qty_3m = df_sink.loc[mask_3m, 'WH_QTY'].sum()
 
-    # qty > 3m
-    df_3plus = df_sink[df_sink['MONTH'] > 3].copy()
-    df_3plus['EXCESS'] = df_3plus['WH_QTY'] - df_3plus['FORECAST'] * 3
-    sku_3plus = df_3plus['SKU'].count()
-    qty_3plus = df_3plus['EXCESS'].sum()
+    # --------------- 3m < qty < 4m -------------------
+    mask_4m = (df_sink['MONTH'] > 3) & (df_sink['MONTH'] <= 4)
+    sku_4m = mask_4m.sum()
+    qty_4m = df_sink.loc[mask_4m, 'WH_QTY'].sum()
 
-    # qty > 4m
-    df_4plus = df_sink[df_sink['MONTH'] > 4].copy()
-    df_4plus['EXCESS'] = df_4plus['WH_QTY'] - df_4plus['FORECAST'] * 4
-    sku_4plus = df_4plus['SKU'].count()
-    qty_4plus = df_4plus['EXCESS'].sum()
+    # --------------- qty > 3m -------------------
+    mask_3plus = df_sink['MONTH'] > 3
+    sku_3plus = mask_3plus.sum()
+    qty_3plus = (
+            df_sink.loc[mask_3plus, 'WH_QTY']
+            - df_sink.loc[mask_3plus, 'FORECAST'] * 3
+    ).sum()
 
-    df_mix = pd.DataFrame({'Supplier': [supplier],
-                           'Total Sku': [total_sku], 'Total Forecast': [total_forecast], 'Total Qty': [total_inventory],
-                           'Qty = 0': [sku_zero],
-                           'Sku-1m': [sku_1m], 'Qty-1m': [qty_1m],
-                           'Sku-2m': [sku_2m], 'Qty-2m': [qty_2m],
-                           'Sku-3m': [sku_3m], 'Qty-3m': [qty_3m],
-                           'Sku-4m': [sku_4m], 'Qty-4m': [qty_4m],
-                           'Sku-3plus': [sku_3plus], 'Qty-3plus': [qty_3plus],
-                           'Sku-4plus': [sku_4plus], 'Qty-4plus': [qty_4plus],
-                           'Sku Accessories': [total_sku_acc],
-                           'Qty Accessories': [total_inventory_acc],
+    # --------------- qty > 4m -------------------
+    mask_4plus = df_sink['MONTH'] > 4
+    sku_4plus = mask_4plus.sum()
+    qty_4plus = (
+            df_sink.loc[mask_4plus, 'WH_QTY']
+            - df_sink.loc[mask_4plus, 'FORECAST'] * 3
+    ).sum()
 
+    # # week < qty < 1m
+    # df_1m = df_sink[df_sink['MONTH'] > 0.23]
+    # df_1m = df_1m[df_1m['MONTH'] <= 1]
+    # sku_1m = df_1m['SKU'].count()
+    # qty_1m = df_1m['WH_QTY'].sum()
+
+    # # 1 < qty < 2m
+    # df_2m = df_sink[df_sink['MONTH'] > 1]
+    # df_2m = df_2m[df_2m['MONTH'] <= 2]
+    # sku_2m = df_2m['SKU'].count()
+    # qty_2m = df_2m['WH_QTY'].sum()
+
+    # # 2 < qty < 3m
+    # df_3m = df_sink[df_sink['MONTH'] > 2]
+    # df_3m = df_3m[df_3m['MONTH'] <= 3]
+    # sku_3m = df_3m['SKU'].count()
+    # qty_3m = df_3m['WH_QTY'].sum()
+
+    # # 3 < qty < 4m
+    # df_4m = df_sink[df_sink['MONTH'] > 3]
+    # df_4m = df_4m[df_4m['MONTH'] <= 4]
+    # sku_4m = df_4m['SKU'].count()
+    # qty_4m = df_4m['WH_QTY'].sum()
+
+    # # qty > 3m
+    # df_3plus = df_sink[df_sink['MONTH'] > 3].copy()
+    # df_3plus['EXCESS'] = df_3plus['WH_QTY'] - df_3plus['FORECAST'] * 3
+    # sku_3plus = df_3plus['SKU'].count()
+    # qty_3plus = df_3plus['EXCESS'].sum()
+
+    # # qty > 4m
+    # df_4plus = df_sink[df_sink['MONTH'] > 4].copy()
+    # df_4plus['EXCESS'] = df_4plus['WH_QTY'] - df_4plus['FORECAST'] * 4
+    # sku_4plus = df_4plus['SKU'].count()
+    # qty_4plus = df_4plus['EXCESS'].sum()
+
+    df_mix = pd.DataFrame({
+                            'Supplier': [supplier],
+                            'Total Sku': [total_sku],
+                            'Total Forecast': [total_forecast],
+                            'Total Qty': [total_inventory],
+
+                            'Qty = 0': [sku_zero],
+
+                            'Sku-1m': [sku_1m], 'Qty-1m': [qty_1m],
+                            'Sku-2m': [sku_2m], 'Qty-2m': [qty_2m],
+                            'Sku-3m': [sku_3m], 'Qty-3m': [qty_3m],
+                            'Sku-4m': [sku_4m], 'Qty-4m': [qty_4m],
+
+                            'Sku-3plus': [sku_3plus], 'Qty-3plus': [qty_3plus],
+                            'Sku-4plus': [sku_4plus], 'Qty-4plus': [qty_4plus],
+
+                            'Sku Accessories': [total_sku_acc],
+                            'Qty Accessories': [total_inventory_acc],
                            })
-
-    # st.write(df)
-    # utils.download_csv(df, 'Download')
 
     return df, df_mix
 
 def inventory_dashboard(datafile_location, forecast_month, supplier, model):
-    # start = time.perf_counter()
-    # supplier = st.sidebar.selectbox("SUPPLIER", suppliers)
-    # model = st.sidebar.text_input("MODEL / COLOR", "ALL")
 
-    values = inventory_mix_df(datafile_location, forecast_month, supplier, model)
-    df_pie = values[1]
+    # unpack inventory_mix_df
+    _, df_pie = inventory_mix_df(datafile_location, forecast_month, supplier, model)
 
-    # st.write(df_pie)
+    total_forecast = df_pie.at[0, 'Total Forecast']
+    # st.write(total_forecast)
+    # st.stop()
 
     colors = [color_hex(324), color_hex(128), color_hex(200), color_hex(423), color_hex(251), 'darkgreen']
 
@@ -131,7 +169,7 @@ def inventory_dashboard(datafile_location, forecast_month, supplier, model):
         values=[df_pie['Qty = 0'].sum(), df_pie['Sku-1m'].sum(), df_pie['Sku-2m'].sum(),
         df_pie['Sku-3m'].sum(), df_pie['Sku-4m'].sum(), df_pie['Sku-4plus'].sum()],
 
-        hole=0.65,
+        hole=0.60,
 
         )),
 
@@ -153,21 +191,25 @@ def inventory_dashboard(datafile_location, forecast_month, supplier, model):
                       margin=dict(l=0, r=0, t=0, b=0),  # extra right margin for legend
 
                       width = 250,
-                      height = 250,
+                      height = 315,
                       )
 
+    # ------------- SET X & Y VALUES for ANNOTATION -----------------------------------
+    x, y = 0.5, 0.5
 
-    x = 0.5
-    y = 0.5
+    fig.add_annotation(x=x, y=y + 0.25,
+                       text='Forecast: ' + str(total_forecast),
+                       font=dict(size=17, family='Book Antiqua', color=color_hex(292)),
+                       showarrow=False)
 
-    fig.add_annotation(x=x, y=y + 0.16,
-                       text='Sink SKU: ' + str(df_pie['Total Sku'].sum()),
+    fig.add_annotation(x=x, y=y + 0.13,
+                       text='SKU: ' + str(df_pie['Total Sku'].sum()),
                        font=dict(size=17, family='Book Antiqua', color='blue'),
                        showarrow=False)
 
     fig.add_annotation(x=x, y=y + 0.06,
                        text='Qty: ' + str(df_pie['Total Qty'].sum())[:-2],
-                       font=dict(size=22, family='Book Antiqua', color='maroon'),
+                       font=dict(size=20, family='Book Antiqua', color='maroon'),
                        showarrow=False)
 
     percent = str(round(df_pie['Qty-3plus'].sum() * 100 / df_pie['Total Qty'].sum(), 0))[:-2] + '%'
@@ -194,9 +236,6 @@ def inventory_dashboard(datafile_location, forecast_month, supplier, model):
                        showarrow=False)
 
     st.plotly_chart(fig, width='stretch')
-
-    # end = time.perf_counter()  # stop runtime counter
-    # st.sidebar.write(f"Runtime: {end - start:.2f} seconds")  # show runtime seconds
 
     return
 
@@ -453,6 +492,10 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
         utils.download_csv(df_wh3, 'Download WH3')
         utils.download_csv(df_wh4, 'Download WH4')
         utils.download_csv(df_fba, 'Download FBA')
+        utils.download_csv(values[9], 'Download LOWES')
+        utils.download_csv(values[11], 'Download FAUCETS')
+        utils.download_csv(values[12], 'Download BATHTUBS')
+
         utils.download_csv(df_l_container, 'Download L-CONTAINER')
         utils.download_csv(df_parts, 'Download PARTS')
         utils.download_csv(df_refurb, 'Download REFURBISHED')

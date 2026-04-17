@@ -200,7 +200,7 @@ def format_header_txt(txt, less_10, less_05, less_05_more_05, more_05, more_10, 
 
     return
 
-def display_product_chit(datafile_location):
+def display_product_chit_OLD(datafile_location):
 
     current_year = date.today().year
 
@@ -334,7 +334,145 @@ def display_product_chit(datafile_location):
     ytd_sales_summary(df_filtered, current_year, previous_year, months_elapsed, supplier)
     return
 
-def ytd_sales_summary(df, current_year, previous_year, month_elapsed, supplier):
+def display_product_chit(datafile_location):
+    # ===================== Setup =====================
+    current_year = date.today().year
+    previous_year = current_year - 1
+    months_elapsed = get_months_elapsed()
+
+    # Load and pre-filter data
+    df_sale = get_two_year_sale(datafile_location, current_year, previous_year)
+    df_sale = df_sale[~df_sale['SKU'].str.startswith('RVA')]
+
+    # ===================== Sidebar Filters =====================
+    supplier_list = sorted(set(df_sale['SUPPLIER']).union({'ALL'}))
+
+    checked = st.sidebar.checkbox("Custom SKU List", value=False)
+
+    if checked:
+        st.sidebar.write("Update ../Monthly_Sales/SKU_List.xlsx")
+        df_filtered = filter_custom_sku_list(datafile_location, df_sale)
+        supplier = "Selected"
+        model = "Selected"
+    else:
+        supplier = st.sidebar.selectbox("SUPPLIER", supplier_list)
+        model = st.sidebar.text_input("MODEL / COLOR", "ALL")
+        df_filtered = filter_dataframe(df_sale, supplier, model)
+
+    # ===================== Sorting =====================
+    df_filtered = df_filtered.sort_values(
+        [str(current_year), 'SKU'],
+        ascending=[False, True]
+    ).reset_index(drop=True)
+
+    df_filtered.index += 1  # start index from 1
+
+    # ===================== Pagination =====================
+    total_rows = len(df_filtered)
+
+    if total_rows > 50:
+        start = st.sidebar.number_input('START INDEX', min_value=1, max_value=501, step=50)
+        end = start + 49
+        df1 = df_filtered.iloc[start - 1:end]
+    else:
+        start, end = 1, total_rows
+        df1 = df_filtered.copy()
+
+    # ===================== Header =====================
+    base_txt = f"{previous_year} & {current_year} Sales Comparison"
+
+    if checked:
+        txt = f"{base_txt} | Model: Selected | {utils.get_todays_date()} | {start} - {end}"
+    else:
+        txt = f"{base_txt} | Supplier: {supplier} | Model: {model.upper()} | {utils.get_todays_date()} | {start} - {end}"
+
+    # ===================== Summary Metrics =====================
+    prev_sum = df1[str(previous_year)].sum()
+    curr_sum = df1[str(current_year)].sum()
+
+    total_change = ((curr_sum - prev_sum) / prev_sum * 100) if prev_sum != 0 else 0
+
+    arrow = '\u2B06' if total_change > 0 else '\u2B07'
+    total_change_txt = f"{abs(round(total_change))}% {arrow}"
+
+    change_series = df1['Change']
+
+    less_10 = (change_series <= -10).sum()
+    less_05 = ((change_series > -10) & (change_series <= -5)).sum()
+    mid = ((change_series > -5) & (change_series <= 5)).sum()
+    more_05 = ((change_series > 5) & (change_series <= 10)).sum()
+    more_10 = (change_series > 10).sum()
+
+    format_header_txt(txt, less_10, less_05, mid, more_05, more_10, total_change_txt)
+
+    # ===================== Grid =====================
+    mygrid = utils.make_grid(10, 6)
+
+    # Pre-extract values (avoid repeated DataFrame filtering)
+    records = df1.to_dict('records')
+
+    # st.write(records)
+    # st.stop()
+
+    row = col = 0
+
+    for rec in records:
+        sku = rec['SKU']
+        prev_val = rec[str(previous_year)]
+        curr_val = rec[str(current_year)]
+        change = rec['Change']
+
+        # Prepare mini table data
+        df = pd.DataFrame({
+            sku: ['Total Sale', 'Avg. Monthly Sale'],
+            previous_year: [prev_val, round(prev_val / months_elapsed, 0)],
+            current_year: [curr_val, round(curr_val / months_elapsed, 0)]
+        })
+
+        header_highlight = get_header_color(change)
+
+        fig = go.Figure(data=[go.Table(
+            columnwidth=[12, 8],
+            header=dict(
+                values=list(df.columns),
+                fill_color=[color_hex(19), color_hex(56), header_highlight],
+                font=dict(family="Arial", size=12, color='white'),
+                line_color='white',
+                height=22,
+                align=['center']
+            ),
+            cells=dict(
+                values=[df[col] for col in df.columns],
+                font=dict(family="Arial", size=11, color='black'),
+                height=22,
+                fill_color=[color_hex(201), color_hex(186), color_hex(12)],
+                line_color='white',
+                align=['left', 'center']
+            )
+        )])
+
+        fig.update_layout(height=69, margin=dict(l=0, r=0, b=0, t=0))
+        mygrid[row][col].plotly_chart(fig, width='stretch')
+
+        # Grid positioning
+        col += 1
+        if col == 5:
+            col = 0
+            row += 1
+
+    # ===================== Downloads =====================
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        utils.download_csv(df1, f'Download {len(df1)}')
+    with col2:
+        utils.download_csv(df_filtered, 'Download All')
+
+    # ===================== Summary =====================
+    ytd_sales_summary(df_filtered, current_year, previous_year, months_elapsed, supplier)
+
+    return
+
+def ytd_sales_summary_OLD(df, current_year, previous_year, month_elapsed, supplier):
 
     # st.write(df)
 
@@ -487,14 +625,174 @@ def ytd_sales_summary(df, current_year, previous_year, month_elapsed, supplier):
     display_supplier_wise_summary(df, current_year, previous_year, col2)
     return
 
+def ytd_sales_summary(df, current_year, previous_year, month_elapsed, supplier):
+
+    # ===================== Preprocessing =====================
+    # Create monthly sales column (vectorized)
+    df['MONTHLY'] = (df[str(current_year)] / month_elapsed).round(0)
+
+    # Split dataset into categories using vectorized string filters
+    df_sink = df[~df['SKU'].str.startswith(('RVB6', 'RVF'))]
+    df_tub = df[df['SKU'].str.startswith('RVB6')]
+    df_faucet = df[df['SKU'].str.startswith('RVF')]
+
+    # ===================== Chunk Summary (Sink) =====================
+    chunk_size = st.sidebar.number_input(
+        'CHUNK SIZE', min_value=10, max_value=50, step=5, value=50
+    )
+
+    total_rows = min(len(df_sink), 450)
+
+    summary_rows = []  # collect rows → faster than concat
+
+    for start in range(0, total_rows, chunk_size):
+        end = min(total_rows, start + chunk_size)
+
+        df_chunk = df_sink.iloc[start:end]
+
+        if df_chunk.empty:
+            continue
+
+        # Get highest & lowest monthly sales in chunk
+        monthly_vals = df_chunk['MONTHLY']
+        sale_highest = int(monthly_vals.iloc[0])
+        sale_lowest = int(monthly_vals.iloc[-1])
+
+        # Aggregate totals
+        total_prev = df_chunk[str(previous_year)].sum()
+        total_curr = df_chunk[str(current_year)].sum()
+
+        summary_rows.append({
+            'S/N': f"{start + 1} - {end}",
+            'Sales/Month': f"{sale_highest} - {sale_lowest}",
+            str(previous_year): total_prev,
+            str(current_year): total_curr
+        })
+
+    # ===================== Additional Categories =====================
+    def add_category_row(df_cat, label):
+        """Helper to summarize a category (bathtub/faucet)"""
+        if df_cat.empty:
+            return None
+
+        monthly_vals = df_cat['MONTHLY']
+        return {
+            'S/N': label,
+            'Sales/Month': f"{int(monthly_vals.iloc[0])} - {int(monthly_vals.iloc[-1])}",
+            str(previous_year): df_cat[str(previous_year)].sum(),
+            str(current_year): df_cat[str(current_year)].sum()
+        }
+
+    # Add bathtub summary if applicable
+    if supplier in ('ALL', 'Nicos', 'Wisdom'):
+        row = add_category_row(df_tub, 'BATHTUB')
+        if row:
+            summary_rows.append(row)
+
+    # Add faucet summary if applicable
+    if supplier == 'ALL':
+        row = add_category_row(df_faucet, 'FAUCET')
+        if row:
+            summary_rows.append(row)
+
+    # ===================== Build Summary DataFrame =====================
+    df_summary = pd.DataFrame(summary_rows)
+
+    # ===================== Calculations =====================
+    df_summary['Difference'] = (
+        df_summary[str(current_year)] - df_summary[str(previous_year)]
+    )
+
+    # Avoid division by zero
+    df_summary['Percentage'] = np.where(
+        df_summary[str(previous_year)] == 0,
+        "New",
+        ((df_summary['Difference'] * 100) / df_summary[str(previous_year)]).round(2)
+    )
+
+    # Format percentage column
+    df_summary['Percentage'] = df_summary['Percentage'].apply(
+        lambda x: f"{x:.2f}" if isinstance(x, (int, float)) else x
+    )
+
+    # ===================== Styling =====================
+    # Alternating row colors
+    df_summary['color'] = [
+        'rgb(240, 248, 255)' if i % 2 == 0 else 'rgb(189, 215, 231)'
+        for i in range(len(df_summary))
+    ]
+
+    # Color negative values differently
+    font_colors = [
+        color_hex(121) if v < 0 else 'black'
+        for v in df_summary['Difference']
+    ]
+
+    # ===================== Plotly Table =====================
+    cols = df_summary.columns
+
+    fig = go.Figure(data=[go.Table(
+        columnwidth=[16, 18, 16, 16, 18],
+        header=dict(
+            values=cols[:6],
+            fill_color=[color_hex(234)] + [color_hex(66)] * 3 + [color_hex(390)],
+            line_color='white',
+            font_color='white',
+            font_size=18,
+            height=34,
+            align=['center']
+        ),
+        cells=dict(
+            values=[df_summary[col] for col in cols[:6]],
+            font_size=20,
+            font=dict(color=[font_colors]),
+            height=40,
+            fill_color=[df_summary['color']],
+            line_color='white',
+            align=['center', 'center', 'right']
+        )
+    )])
+
+    # Add border
+    fig.add_shape(
+        type="rect",
+        xref="paper", yref="paper",
+        x0=0, y0=0, x1=1, y1=1,
+        line=dict(color=color_hex(39), width=3),
+        layer="above"
+    )
+
+    fig.update_layout(
+        height=len(df_summary) * 40 + 35,
+        margin=dict(l=0, r=0, b=0, t=0)
+    )
+
+    # ===================== UI Display =====================
+    col1, col2, col3 = st.columns([1, 0.8, 0.4])
+
+    with col1:
+        txt = f"YTD | Sales Summary {previous_year} & {current_year} | Supplier: {supplier} | {utils.get_todays_date()}"
+
+        st.markdown(
+            f'<p style="font-family: Book Antiqua; color: {color_hex(118)}; text-align:left; font-size: 18px ;border-radius:2%; line-height:0em; '
+            f'margin-top:10px"> {txt} </p>', unsafe_allow_html=True)
+
+        st.plotly_chart(fig, width='stretch')
+
+    # ===================== Downloads =====================
+    utils.download_csv(df_summary, 'Download Summary')
+    st.write('')
+
+    # ===================== Additional Summary =====================
+    display_supplier_wise_summary(df, current_year, previous_year, col2)
+
+    return
 
 def display_supplier_wise_summary(df, current_year, previous_year, col2):
 
     df = df.groupby('SUPPLIER').aggregate({str(previous_year): 'sum', str(current_year): 'sum'}).reset_index()
     df['Difference'] = df[str(current_year)] - df[str(previous_year)]
     df['Percentage'] = round(df['Difference'] * 100 / df[str(previous_year)], 2)
-
-    # df['Percentage'] = df['Percentage'].replace([np.inf, -np.inf, np.nan], 'New')
 
     df['Percentage'] = [
         "New" if (v is None or v == "" or (isinstance(v, float) and np.isinf(v)))
@@ -510,7 +808,7 @@ def display_supplier_wise_summary(df, current_year, previous_year, col2):
         txt = 'YTD | Supplier-wise Sales Summary ' + str(previous_year) + ' & ' + str(current_year)
 
         st.markdown(
-            f'<p style="font-family: Book Antiqua; color: {color_hex(118)}; text-align:left; font-size: 20px ;border-radius:2%; line-height:0em; '
+            f'<p style="font-family: Book Antiqua; color: {color_hex(118)}; text-align:left; font-size: 18px ;border-radius:2%; line-height:0em; '
             f'margin-top:10px"> {txt} </p>', unsafe_allow_html=True)
 
         cols = df.columns
@@ -553,7 +851,7 @@ def display_supplier_wise_summary(df, current_year, previous_year, col2):
     return
 
 
-def display_return_product_chit(datafile_location):
+def display_return_product_chit_OLD(datafile_location):
 
     def get_total_return(sku, df):
         df_temp = df[df['SKU'] == sku]
@@ -811,7 +1109,7 @@ def display_return_product_chit(datafile_location):
     return
 
 
-def return_product_wise_summary(df, all_data):
+def return_product_wise_summary_OLD(df, all_data):
 
     txt = 'YTD - Product-wise Return Summary | ' + ut.get_todays_date()
 

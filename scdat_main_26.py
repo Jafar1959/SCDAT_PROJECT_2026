@@ -20,12 +20,10 @@ import scdat_sales_forecast_dashboard_26 as sfd
 import scdat_inventory_count_26 as inv_count
 import scdat_product_chit_26 as chit
 
-
-
 # ============= my variables =========================
-CURRENT_MONTH = 'Mar'
+CURRENT_MONTH = 'Apr'
 CURRENT_YEAR = '2026'
-FORECAST_MONTH = '03_Mar-2026'
+FORECAST_MONTH = '04_Apr-2026'
 SUPPLIERS = ['ALL',
             'Aquacubic',
             'Bomeijia',

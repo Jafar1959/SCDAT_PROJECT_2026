@@ -186,3 +186,7 @@ def show_header(txt):
                     <hr style="border: 1px groove #EEB422;  width: 97.5%; margin-top:0px; margin-bottom:35px;">
                     """, unsafe_allow_html=True)
     return
+
+def exclude_sku_prefixes(df, prefixes):
+    df = df[~df["SKU"].str.startswith(prefixes, na=False)]
+    return df

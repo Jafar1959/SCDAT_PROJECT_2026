@@ -240,7 +240,6 @@ def amazon_df(datafile_location, month, year):
 
     return df
 
-
 def zen_df(datafile_location, month, year):
     month_no = utils.get_month_no(month)
 
@@ -317,110 +316,100 @@ def zen_df(datafile_location, month, year):
     return df_new
 
 def wh_wise_inventory_df(datafile_location):
-    # create dataframe from WH_Inventory_Qty.csv << =========================================================
+    # --------------- create dataframe from WH_Inventory_Qty.csv --------------------------
     file_path = Path(PureWindowsPath(datafile_location + "Inventory\\WH_Inventory_Qty.csv"))
     df_wh = pd.read_csv(file_path)
 
-    df_wh = df_wh[['Product/Internal Reference', 'Location', 'Inventoried Quantity']]
-    df_wh.columns = (['SKU', 'LOCATION', 'QTY'])    # change column name
+    # -------------- Change column name & select columns ------------------------------
+    df_wh = df_wh.rename(columns={
+        'Product/Internal Reference': 'SKU',
+        'Location': 'LOCATION',
+        'Inventoried Quantity': 'QTY'
+    })[['SKU', 'LOCATION', 'QTY']]
 
-    # keep data for WH physical locations only << =============================================================
-    df_wh = df_wh[df_wh["LOCATION"] != 'AMZ/Stock']
-    df_wh = df_wh[df_wh["LOCATION"] != 'WH1/Output']
-    df_wh = df_wh[df_wh["LOCATION"] != 'WH1/Quality Check']
-    df_wh = df_wh[df_wh["LOCATION"] != 'WH1/Stock']
-    df_wh = df_wh[df_wh["LOCATION"] != 'WH1/Stock/Virtual-WH5']
+    # ---------------- exclude locations and remove blank SKUs ------------------------
+    excluded_locations = [
+        'AMZ/Stock',
+        'WH1/Output',
+        'WH1/Quality Check',
+        'WH1/Stock',
+        'WH1/Stock/DAMAGED',
+        'WH1/Stock/Virtual-WH5'
+    ]
 
-    df_wh = df_wh[df_wh['SKU'].notna()]  # remove blank lines
+    df_wh = df_wh[
+        ~df_wh['LOCATION'].isin(excluded_locations) & df_wh['SKU'].notna()
+        ]
 
-    # add suppliers name << ==================================================================================
-    df_product = product_df(datafile_location)
-    df_wh = pd.merge(df_wh, df_product, on=["SKU"], how='left')
-    df_wh = df_wh.sort_values(['LOCATION', 'SKU'], ascending=[True, True])
+    # --------------- add suppliers name --------------------------------------------------------------
+    df_product = product_df(datafile_location)[['SKU', 'SUPPLIER']]
 
-    prefix = st.sidebar.text_input('Enter Z-', 'Z-')
+    df_wh = (
+        df_wh
+        .merge(df_product, on='SKU', how='left')
+        .sort_values(['LOCATION', 'SKU'])
+        .rename(columns={'LOCATION': 'WH_LOCATION'})
+    )
 
-    z = prefix.upper()
+    # -------------------- get location string only --------------------------------------------------
+    df_wh['LOCATION'] = df_wh['WH_LOCATION'].str.rsplit('/', n=1).str[-1]
 
-    # WH_parts inventory only << =============================================================================
-    # df_parts = df_wh[df_wh["LOCATION"] == 'WH1/Stock/' + z + 'Austin/PARTS']
-    # df_parts['SKU'] = df_parts['SKU'].fillna('VOID')
-    # df_parts = df_parts[df_parts["SKU"] != 'VOID']
-    # df_parts = df_parts.loc[lambda row: row['SKU'].str.startswith('RVA')]
+    # ----------------- get accessories inventory only ----------------------------------------------
+    df_accessories = df_wh[df_wh['SKU'].str.startswith('RVA')]
 
-    df_parts = df_wh.loc[lambda row: row['SKU'].str.startswith('RVA')]
-
-    # WH1 inventory only, locations P, Q and P-Receiving only << =============================================
-    df_temp = df_wh[df_wh["LOCATION"] != 'WH1/Stock/' + z + 'Austin/PARTS']
-    df_wh1_p = df_temp.loc[lambda row: row['LOCATION'].str.startswith('WH1/Stock/' + z + 'Austin/P')]
-    df_wh1_q = df_temp.loc[lambda row: row['LOCATION'].str.startswith('WH1/Stock/' + z + 'Austin/Q')]
-
-    df_wh1 = pd.concat([df_wh1_p, df_wh1_q])
-
-    df_wh1 = df_wh1.loc[lambda row: ~ row['SKU'].str.startswith('RVA')]
-    df_wh1 = df_wh1.loc[lambda row: row['SKU'].str.startswith('RV')]
-
-    # WH3 inventory only, location T only << ================================================================
-    df_wh3 = df_wh.loc[lambda row: row['LOCATION'].str.startswith('WH1/Stock/' + z + 'Austin/T')]
-    df_wh3 = df_wh3.loc[lambda row: ~ row['SKU'].str.startswith('RVA')]
-    df_wh3 = df_wh3.loc[lambda row: row['SKU'].str.startswith('RV')]
-
-    # WH4 inventory only, locations J, K and L-FLOOR << =====================================================
-    df_temp = df_wh[df_wh["LOCATION"] != 'WH1/Stock/' + z + 'Austin/L-BOXES']
-
-    df_wh4_j = df_temp.loc[lambda row: row['LOCATION'].str.startswith('WH1/Stock/' + z + 'Austin/J')]
-    df_wh4_k = df_temp.loc[lambda row: row['LOCATION'].str.startswith('WH1/Stock/' + z + 'Austin/K')]
-    df_wh4_l = df_temp.loc[lambda row: row['LOCATION'].str.startswith('WH1/Stock/' + z + 'Austin/L-F')]
-
-    df_wh4 = pd.concat([df_wh4_j, df_wh4_k, df_wh4_l])
-    df_wh4 = df_wh4.loc[lambda row: ~ row['SKU'].str.startswith('RVA')]
-    df_wh4 = df_wh4.loc[lambda row: row['SKU'].str.startswith('RV')]
-
-    # WH2 - HOUSTON inventory only << ======================================================
-    df_wh2_g = df_wh.loc[lambda row: row['LOCATION'].str.startswith('WH1/Stock/Houston/G')]
-    df_wh2_h = df_wh.loc[lambda row: row['LOCATION'].str.startswith('WH1/Stock/Houston/H')]
-    df_wh2_f = df_wh.loc[lambda row: row['LOCATION'].str.startswith('WH1/Stock/Houston/F-F')]
-
-    df_wh2 = pd.concat([df_wh2_g, df_wh2_h, df_wh2_f])
-    df_wh2 = df_wh2.loc[lambda row: ~ row['SKU'].str.startswith('RVA')]
-
-    # WH4 - REFURBISHED inventory only << ==================================================================
-    df_refurb = df_wh.loc[lambda row: row['LOCATION'].str.startswith('WH1/Stock/REFURB')]
-    df_refurb = df_refurb.loc[lambda row: row['SKU'].str.endswith('-REFURB')]
-
-    # WH4 BOX inventory only, location L-BOX only  << ======================================================
-    # df_box = df_wh.loc[lambda row: row['LOCATION'].str.startswith('WH1/Stock/' + z + 'Austin/L-BOXES')]
-    df_box = df_wh.loc[lambda row: row['SKU'].str.startswith('RBX')]
-
-    # location L-CONTAINER only  << ======================================================
-    df_container = df_wh.loc[lambda row: row['LOCATION'].str.startswith('WH1/Stock/' + z + 'Austin/L-CON')]
-
-    # Lowes Retail Models only  << ======================================================
-    retail_models = ['RVH180051LM', 'RVH183001LM', 'RVH185841LM', 'RVH165301BL', 'RVG11080BK', 'RVG123061BK']
-    df_retail = df_wh[df_wh['SKU'].isin(retail_models)]
-
-    # Faucets only  << ======================================================
-    df_faucet = df_wh.loc[lambda row: row['SKU'].str.startswith('RVF')]
-
-    # Bathtubs only  << ======================================================
+    # ----------------- Bathtubs only -------------------------------------------------------------
     df_bathtub = df_wh.loc[lambda row: row['SKU'].str.startswith('RVB6')]
 
-    # st.write(df_bathtub)
-    # st.write(df_retail)
+    # ----------------- Faucets only ------------------------------------------------------------
+    df_faucet = df_wh.loc[lambda row: row['SKU'].str.startswith('RVF')]
+
+    # ------------------- Faucet Parts only  -----------------------------------------------------------
+    df_faucet_parts = df_wh.loc[lambda row: row['SKU'].str.startswith('RVP')]
+
+    # ------------------- Packing Box ------------------------------------------------------------------
+    df_box = df_wh.loc[lambda row: row['SKU'].str.startswith('RBX')]
+
+    # ----------------- Refurbished Inventory only ----------------------------------------------------
+    df_refurb = df_wh.loc[lambda row: row['SKU'].str.endswith('-REFURB')]
+
+    # ----------------------- Lowes Retail Models only ---------------------------------------------------
+    retail_models = ['RVA9001LM', 'RVH180051LM', 'RVH183001LM', 'RVH185841LM', 'RVH165301BL', 'RVG11080BK', 'RVG123061BK']
+    df_retail = df_wh[df_wh['SKU'].isin(retail_models)]
+
+    prefixes = (
+        'RVA',  # accessories
+        'RVP',  # faucet parts
+        'RDM',  # dummy faucet
+        'RBX',  # packing boxes
+        'RVF',  # faucets
+        'RVB6', # bathtubs
+        'OPEN-BOX'  # openbox
+        )
+
+    df_sink = utils.exclude_sku_prefixes(df_wh, prefixes)
+    df_sink = df_sink.loc[lambda row: ~ row['SKU'].str.endswith('-REFURB')]     # remove refurb skus
+
+    # st.write(df_sink)
+    # utils.download_csv(df_sink, 'Download Sink Data')
     # st.stop()
 
-    # st.write(df_wh)
-    # st.write(df_wh['QTY'].sum())
-    # st.write(df_parts['QTY'].sum())
-    # st.write(df_wh1['QTY'].sum())
-    # st.write(df_wh3['QTY'].sum())
-    # st.write(df_wh4['QTY'].sum())
-    # st.write(df_wh2['QTY'].sum())
-    # st.write(df_box['QTY'].sum())
-    # st.write(df_refurb['QTY'].sum())
-    # st.stop()
+    # -------------- get WH1 inventory only (P, Q, P-RECEIVING) -------------------------------------
+    df_wh1 = df_sink[df_sink['LOCATION'].str.startswith(('P', 'Q', 'P-R'))]
 
-    return df_wh, df_wh1, df_wh2, df_wh3, df_wh4, df_parts, df_box, df_refurb, df_container, df_retail, retail_models, df_faucet, df_bathtub
+    # --------------- WH3 inventory only, location T only  ------------------------------------------
+    df_wh3 = df_sink[df_sink['LOCATION'].str.startswith('T')]
+
+    # ----------------- WH4 inventory only, locations J, K and L-FLOOR -----------------------------
+    df_wh4 = df_sink[df_sink['LOCATION'].str.startswith(('J', 'K', 'L-F'))]
+
+    # ------------ WH2 - HOUSTON inventory only ----------------------------------------------------
+    df_wh2 = df_sink[df_sink['LOCATION'].str.startswith(('G', 'H', 'F-F'))]
+
+    # location L-CONTAINER only  << ======================================================
+    df_container = df_sink[df_sink['LOCATION'].str.startswith('L-CON')]
+
+    return df_wh, df_wh1, df_wh2, df_wh3, df_wh4, df_accessories, df_box, df_refurb, df_container, df_retail, retail_models, df_faucet, \
+        df_bathtub, df_faucet_parts
 
 
 def sc_summary_df_OLD(datafile_location, supplier, model):
@@ -671,7 +660,6 @@ def backorder_df(datafile_location):
     return df
 
 def sales_trend_df(datafile_location, supplier, model, month_list):
-
     df_sales = pd.DataFrame({})
 
     for i in range (0, len(month_list)):
@@ -712,6 +700,10 @@ def sales_trend_df(datafile_location, supplier, model, month_list):
 
     df_summary = df_sink.groupby('MONTH', sort=False)['TOTAL'].sum().to_frame().reset_index()
     df_summary = df_summary.rename(columns={'TOTAL': 'SALES'})
+    df_summary["12M_AVG"] = df_summary["SALES"].rolling(window=12).mean()
+
+    # st.write(df_summary)
+    # st.stop()
 
     return df_summary, df_sales
 
@@ -743,25 +735,11 @@ def forecast_trend_df(datafile_location, supplier, model, month_list):
             lambda row: row['SKU'].str.startswith(model.upper()) |
                         row['SKU'].str.endswith(model.upper())
         ]
-    # df_forecast = utils.supplier_model_query(df_forecast, supplier, model)  # query on supplier & model / color
 
-    # st.write(df)
+    # df_sink = df_forecast[~df_forecast['SKU'].astype(str).str.contains("RVA")]      # <<<<<<<<<< REMOVE RVA <<<<<<<<<<<<<<
 
-
-    #     # st.write(df_temp)
-    #     # st.stop()
-    #
-    #     df = df[['SKU', 'FORECAST', 'SUPPLIER', 'MONTH']]
-    #
-    #     if i == 0:
-    #         df_forecast = df
-    #
-    #     else:
-    #         df_forecast = pd.concat([df_forecast, df])
-    #
-    # #df_forecast = utils.supplier_model_query(df_forecast, supplier, model)  # query on supplier & model / color
-    #
-    df_sink = df_forecast[~df_forecast['SKU'].astype(str).str.contains("RVA")]      # <<<<<<<<<< REMOVE RVA <<<<<<<<<<<<<<
+    prefixes = ('RVA', 'RBX', 'RDM', 'RVP')  # accessories, boxes, dummy faucets, faucet parts
+    df_sink = utils.exclude_sku_prefixes(df_forecast, prefixes)
     #
     df_sink = df_sink.groupby('MONTH', sort=False)['FORECAST'].sum().to_frame().reset_index()
     #
@@ -1178,4 +1156,457 @@ def lowes_sales(datafile_location):
     utils.download_csv(df1, 'Download')
     return
 
+def inventory_level_projection_df_OLD(datafile_location, current_month, current_year, forecast_month, supplier, model):
 
+    return_factor = 0.06  # 6% return
+    wh_sales_factor = 0.7  # 70% sales at WH
+    fba_send_factor = 0.26  # 26% inventory send to Amazon
+
+    values = weekly_arrival_df(datafile_location, supplier) #current_month, current_year, forecast_month, supplier)
+    df = values[0]  # df for the Bar Chart
+
+    # get weekly incoming quantities
+    weekly_incoming = df['QTY'].to_list()
+
+    # get current inventory and current month sale
+    df2 = sc_summary_inventory_df(datafile_location, current_month, current_year, forecast_month, supplier, model)
+
+    wh_inventory = df2.iloc[0][0]
+    current_month_sales = df2.iloc[0][3]
+    last_30_days_sales = df2.iloc[0][4]
+
+    # now = datetime.datetime.now()
+    # now_days = now.day
+
+    # sales_per_week = round(current_month_sales * 7/(now_days-1), 0)
+    # sales_per_week = round(current_month_sales * 7/30, 0)
+    avg_sales_per_week = round(last_30_days_sales * 7/30, 0)
+
+    weekly_projection = []
+    current_inventory = wh_inventory
+    for j in range(0, len(weekly_incoming)):
+        projection = round((current_inventory + weekly_incoming[j] * (1 - fba_send_factor) + avg_sales_per_week * return_factor -
+                            avg_sales_per_week * wh_sales_factor), 0)
+
+        current_inventory = projection
+        weekly_projection.append(projection)
+
+    df['PROJECTION'] = weekly_projection
+
+    return df, avg_sales_per_week, wh_inventory, current_month_sales
+
+def weekly_arrival_df_OLD(datafile_location, supplier):
+
+    def get_week_range(start, end):
+        start = start + timedelta(days=1)
+        s = str(start).split('-')
+
+        e = str(end).split('-')
+
+        week_range = s[1] + '/' + s[2] + ' - ' + e[1] + '/' + e[2]
+        return week_range
+
+    value = sc_summary_container_df(datafile_location, supplier)
+    df = value[0]
+    #st.write(df)
+
+    df_supplier = df
+    if supplier != 'ALL' and supplier != 'Speed':
+        df_supplier = df[df['SUPPLIER'] == supplier]
+
+    if supplier == 'Speed':
+        df_supplier = df[(df['SUPPLIER'] == 'Speed') | (df['SUPPLIER'] == 'Speed (Vietta)')]
+
+    # calculates dates for next 6 weeks ------------------------------
+    today = date.today()
+    end_of_week0 = today - timedelta(days=1)
+    end_of_week1 = today + timedelta(days=7)
+    end_of_week2 = today + timedelta(days=14)
+    end_of_week3 = today + timedelta(days=21)
+    end_of_week4 = today + timedelta(days=28)
+    end_of_week5 = today + timedelta(days=35)
+    end_of_week6 = today + timedelta(days=42)
+    end_of_week7 = today + timedelta(days=49)
+    end_of_week8 = today + timedelta(days=56)
+    end_of_week9 = today + timedelta(days=63)
+    end_of_week10 = today + timedelta(days=70)
+
+    # st.write(end_of_week1)
+
+    # get week1 incoming container list
+    df_week1 = df_supplier[df_supplier['ZEN_ETA'] <= end_of_week1]
+    # st.write(df_week1)
+    df_week1 = df_week1.groupby(['PO', 'SUPPLIER', 'ZEN_ETA'])['QTY'].sum().to_frame().reset_index()
+    week1_total = df_week1['QTY'].sum()
+    df_w1 = df_week1.drop_duplicates(subset=['PO'], keep='first')
+    week1_containers = df_w1['PO'].count()
+
+    # get week2 incoming container list
+    df_week2 = df_supplier[df_supplier['ZEN_ETA'] > end_of_week1]
+    df_week2 = df_week2[df_week2['ZEN_ETA'] <= end_of_week2]
+    df_week2 = df_week2.groupby(['PO', 'SUPPLIER', 'ZEN_ETA'])['QTY'].sum().to_frame().reset_index()
+    week2_total = df_week2['QTY'].sum()
+    df_w2 = df_week2.drop_duplicates(subset=['PO'], keep='first')
+    week2_containers = df_w2['PO'].count()
+
+    # get week3 incoming container list
+    df_week3 = df_supplier[df_supplier['ZEN_ETA'] > end_of_week2]
+    df_week3 = df_week3[df_week3['ZEN_ETA'] <= end_of_week3]
+    df_week3 = df_week3.groupby(['PO', 'SUPPLIER', 'ZEN_ETA'])['QTY'].sum().to_frame().reset_index()
+    week3_total = df_week3['QTY'].sum()
+    df_w3 = df_week3.drop_duplicates(subset=['PO'], keep='first')
+    week3_containers = df_w3['PO'].count()
+
+    # get week4 incoming container list
+    df_week4 = df_supplier[df_supplier['ZEN_ETA'] > end_of_week3]
+    df_week4 = df_week4[df_week4['ZEN_ETA'] <= end_of_week4]
+    df_week4 = df_week4.groupby(['PO', 'SUPPLIER', 'ZEN_ETA'])['QTY'].sum().to_frame().reset_index()
+    week4_total = df_week4['QTY'].sum()
+    df_w4 = df_week4.drop_duplicates(subset=['PO'], keep='first')
+    week4_containers = df_w4['PO'].count()
+
+    # get week5 incoming container list
+    df_week5 = df_supplier[df_supplier['ZEN_ETA'] > end_of_week4]
+    df_week5 = df_week5[df_week5['ZEN_ETA'] <= end_of_week5]
+    df_week5 = df_week5.groupby(['PO', 'SUPPLIER', 'ZEN_ETA'])['QTY'].sum().to_frame().reset_index()
+    week5_total = df_week5['QTY'].sum()
+    df_w5 = df_week5.drop_duplicates(subset=['PO'], keep='first')
+    week5_containers = df_w5['PO'].count()
+
+    # get week6 incoming container list
+    df_week6 = df_supplier[df_supplier['ZEN_ETA'] > end_of_week5]
+    df_week6 = df_week6[df_week6['ZEN_ETA'] <= end_of_week6]
+    df_week6 = df_week6.groupby(['PO', 'SUPPLIER', 'ZEN_ETA'])['QTY'].sum().to_frame().reset_index()
+    week6_total = df_week6['QTY'].sum()
+    df_w6 = df_week6.drop_duplicates(subset=['PO'], keep='first')
+    week6_containers = df_w6['PO'].count()
+
+    # get week7 incoming container list
+    df_week7 = df_supplier[df_supplier['ZEN_ETA'] > end_of_week6]
+    df_week7 = df_week7[df_week7['ZEN_ETA'] <= end_of_week7]
+    df_week7 = df_week7.groupby(['PO', 'SUPPLIER', 'ZEN_ETA'])['QTY'].sum().to_frame().reset_index()
+    week7_total = df_week7['QTY'].sum()
+    df_w7 = df_week7.drop_duplicates(subset=['PO'], keep='first')
+    week7_containers = df_w7['PO'].count()
+
+    # get week8 incoming container list
+    df_week8 = df_supplier[df_supplier['ZEN_ETA'] > end_of_week7]
+    df_week8 = df_week8[df_week8['ZEN_ETA'] <= end_of_week8]
+    df_week8 = df_week8.groupby(['PO', 'SUPPLIER', 'ZEN_ETA'])['QTY'].sum().to_frame().reset_index()
+    week8_total = df_week8['QTY'].sum()
+    df_w8 = df_week8.drop_duplicates(subset=['PO'], keep='first')
+    week8_containers = df_w8['PO'].count()
+
+    # get week9 incoming container list
+    df_week9 = df_supplier[df_supplier['ZEN_ETA'] > end_of_week8]
+    df_week9 = df_week9[df_week9['ZEN_ETA'] <= end_of_week9]
+    df_week9 = df_week9.groupby(['PO', 'SUPPLIER', 'ZEN_ETA'])['QTY'].sum().to_frame().reset_index()
+    week9_total = df_week9['QTY'].sum()
+    df_w9 = df_week9.drop_duplicates(subset=['PO'], keep='first')
+    week9_containers = df_w9['PO'].count()
+
+    # get week10 incoming container list
+    df_week10 = df_supplier[df_supplier['ZEN_ETA'] > end_of_week9]
+    df_week10 = df_week10[df_week10['ZEN_ETA'] <= end_of_week10]
+    df_week10 = df_week10.groupby(['PO', 'SUPPLIER', 'ZEN_ETA'])['QTY'].sum().to_frame().reset_index()
+    week10_total = df_week10['QTY'].sum()
+    df_w10 = df_week10.drop_duplicates(subset=['PO'], keep='first')
+    week10_containers = df_w10['PO'].count()
+
+    week1 = get_week_range(end_of_week0, end_of_week1)
+    week2 = get_week_range(end_of_week1, end_of_week2)
+    week3 = get_week_range(end_of_week2, end_of_week3)
+    week4 = get_week_range(end_of_week3, end_of_week4)
+    week5 = get_week_range(end_of_week4, end_of_week5)
+    week6 = get_week_range(end_of_week5, end_of_week6)
+    week7 = get_week_range(end_of_week6, end_of_week7)
+    week8 = get_week_range(end_of_week7, end_of_week8)
+    week9 = get_week_range(end_of_week8, end_of_week9)
+    week10 = get_week_range(end_of_week9, end_of_week10)
+
+
+    df_summary = pd.DataFrame({'WEEK': [week1, week2, week3, week4, week5, week6, week7, week8, week9, week10],
+                               'CONTAINER': [week1_containers, week2_containers, week3_containers, week4_containers, week5_containers,
+                                             week6_containers, week7_containers, week8_containers, week9_containers, week10_containers],
+                               'QTY': [week1_total, week2_total, week3_total, week4_total, week5_total, week6_total, week7_total, week8_total,
+                                       week9_total, week10_total]
+                               })
+
+    return df_summary, df_week1, df_week2, df_week3, df_week4, df_week5, df_week6, df_week7, df_week8
+
+def sc_summary_container_df(datafile_location, supplier):
+    # --------- Provide Sink Data only --------------------------
+    # ----------------- CCS incoming only ---------------------------------------
+    df_ccs = ccs_df(datafile_location)
+    df_ccs = df_ccs[df_ccs['Delivered Date'] == 'BLANK']
+    df_ccs = df_ccs[df_ccs['CONTAINER NO.'] != 'BLANK']
+    # df_ccs = df_ccs[df_ccs['CONTAINER NO.'] != 'BLANK']
+    # st.write(df_ccs)
+    df_ccs = df_ccs[['CONTAINER NO.', 'FROM', 'Loading Date']]
+    df_ccs = df_ccs.rename(columns={'CONTAINER NO.': 'PO', 'FROM': 'SUPPLIER'})
+    # df_ccs['PO'] = df_ccs.apply(lambda x: str(x.iloc[0])[:-2], axis=1) ----------- blocled on 05/28/2024
+
+    # st.write(df_ccs)
+    # st.stop()
+
+    # --------------- INCOMING CONTAINERS ONLY --------------------------------
+    df_container = container_df(datafile_location)
+    df_container = df_container[df_container['STATE'] != 'Received In Warehouse']
+
+    # exceptions = ['RVA1018BN', 'RVA1018MB']
+    # df_container = df_container.loc[
+    #     lambda row: ~ row['SKU'].str.startswith('RVA') | row['SKU'].isin(exceptions)
+    # ]
+
+    df_container = df_container.loc[lambda row: ~ row['SKU'].str.startswith('RVA')]
+    df_container = df_container.loc[lambda row: ~ row['SKU'].str.startswith('RVP')]     # faucet accessories
+
+    df_container = df_container.rename(columns={'ODDO_ETA': 'ZEN_ETA'})
+    df_container['PO'] = df_container.apply(lambda x: str(x.iloc[0])[0:4], axis=1)
+
+    # st.write(df_container)
+
+    # ------------------- MERGE (CCS + CONTAINER) -----------------------------------------------
+    df_ccs_container = pd.merge(df_ccs, df_container, on=["PO"], how='left')
+    df_ccs_container = df_ccs_container[['PO', 'SUPPLIER', 'Loading Date', 'ZEN_ETA', 'SKU', 'QTY']]
+    df_ccs_container = df_ccs_container.fillna(0)
+    df_ccs_container = df_ccs_container[df_ccs_container['ZEN_ETA'] != 0]
+
+    # --------------------- QUERY ON SUPPLIER --------------------------------------------------
+    df = df_ccs_container
+
+    # st.write(df_ccs_container)
+    # st.stop()
+
+    if supplier != 'ALL' and supplier != 'Speed':
+        df = df[df['SUPPLIER'] == supplier]
+
+    if supplier == 'Speed':
+        df = df[(df['SUPPLIER'] == 'Speed') | (df['SUPPLIER'] == 'Speed (Vietta)')]
+
+    incoming_qty = df['QTY'].sum()
+
+    df_container_no = df.drop_duplicates(subset=['PO'], keep='first')
+    incoming_containers = df_container_no['PO'].count()
+
+
+    # ------------------ SUMMARY DATAFRAME ------------------------------------------------
+    df_summary = pd.DataFrame({'Ocean': [incoming_qty],
+                               'Containers': [incoming_containers],
+                               })
+
+    # st.write(df_summary)
+    # st.stop()
+
+    return df, df_summary
+
+
+def weekly_container_arrival_df(datafile_location, supplier, model):
+    # get sku and supplier list
+    df_product = product_df(datafile_location)[['SKU', 'SUPPLIER']]
+
+    # unpack container_df
+    df_ocean, *_ = container_df(datafile_location)
+
+    # merge to add supplier
+    df_ocean = pd.merge(df_ocean, df_product, on=["SKU"], how='left')[['PO', 'SKU', 'SUPPLIER', 'ODDO_ETA', 'QTY']]
+
+    # remove all accessories, packing boxes, dummy faucet & faucet parts
+    prefixes = ('RVA', 'RBX', 'RDM', 'RVP')
+    df_ocean = utils.exclude_sku_prefixes(df_ocean, prefixes)
+
+    # filter based on supplier/model/color
+    df = utils.supplier_model_query(df_ocean, supplier, model)
+
+    # Ensure datetime
+    df['ODDO_ETA'] = pd.to_datetime(df['ODDO_ETA'])
+
+    # get first date of the df
+    today = pd.to_datetime(date.today())
+
+    if not df.empty:
+        start_date = min(df['ODDO_ETA'].iloc[0], today)
+    else:
+        start_date = today
+
+    # generate 8 x 7 = 56 dates from the first date if less
+    dates = [start_date + timedelta(days=i) for i in range(56)]
+
+    # create dataframe with 56 dates and merge with df
+    df_56 = pd.DataFrame({'ODDO_ETA': dates})
+    df = pd.merge(df_56, df, on=["ODDO_ETA"], how='left')
+    df = df.fillna(0)
+
+    # Create week-of-month
+    df['week_of_month'] = (df['ODDO_ETA'].dt.day - 1) // 7 + 1
+
+    df['month'] = df['ODDO_ETA'].dt.to_period('M')
+    df['month_week'] = df['month'].astype(str) + ' W' + df['week_of_month'].astype(str)
+
+
+    # split df
+    df_po = df[['PO', 'month_week']]
+    df_po = df_po[df['PO'] != 0]
+    df_po = df_po.drop_duplicates(subset='PO')
+    df_po = df_po.groupby('month_week')['PO'].count()
+
+    df_qty = df[['QTY', 'month_week']]
+    df_qty = df_qty.groupby('month_week', as_index=False)['QTY'].sum()
+
+    df_sum = pd.merge(df_qty, df_po, on=["month_week"], how='left')
+    df_sum['PO_QTY'] = df_sum['QTY'].astype(int).astype(str) + ' [' + df_sum['PO'].astype(str) + ']'
+    df_sum['PO_QTY'] = df_sum['PO_QTY'].str.replace('.0]', ']', regex=False)
+
+    # st.write(df)    # all data
+    # st.write(df_sum)    # summary data
+    # st.stop()
+
+    return df, df_sum
+
+
+def get_date_parts():
+    # today = pd.to_datetime("2026-03-31")      # test case
+    today = date.today()
+    back_30_date = today - timedelta(days=30)
+
+    # st.write(today)
+    # st.write(back_30_date)
+
+    return calendar.month_abbr[today.month], today.year, today.day, calendar.month_abbr[back_30_date.month], back_30_date.year, back_30_date.day
+
+def last_30_days_sales_df(datafile_location, supplier, model):
+    # unpack data
+    current_month, current_year, current_date, back_30_month, back_30_year, back_30_date = get_date_parts()
+
+    # get sales data
+    current = str(current_month) + '-' + str(current_year)
+
+    df_current = (one_month_sales_df(datafile_location, current_month, str(current_year))
+                  .loc[:, ['SKU', 'SUPPLIER', 'TOTAL']]
+                  .rename(columns={'TOTAL': current})
+                 )
+
+    if current_date < 30:   # get sales value from previous month
+        previous = str(back_30_month) + '-' + str(back_30_year)
+
+        df_back_30_day = (one_month_sales_df(datafile_location, back_30_month, str(back_30_year))
+                      .loc[:, ['SKU', 'TOTAL']]
+                      .rename(columns={'TOTAL': previous})
+                      )
+        # merge
+        df_sales = df_current.merge(df_back_30_day, on='SKU', how='outer')
+
+        # get total days of back_30_month
+        month_num = datetime.strptime(back_30_month, "%b").month
+        _, total_days = calendar.monthrange(back_30_year, month_num)
+
+        # st.write(total_days)
+
+        factor = (total_days - back_30_date + 1) / total_days   # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< Need to check
+        df_sales['30_Day_Sale'] = round(df_sales[current] + df_sales[previous] * factor, 0)
+
+    else:   # get 30 days sales value from current month only
+        df_sales = df_current
+
+        df_sales['30_Day_Sale'] = round(df_sales[current] * 30/(current_date-1), 0)     # use one day less
+
+    # df_sales['Weekly_Sale'] = round(df_sales['30_Day_Sale'] * 7/30, 2)
+
+    df_sales = utils.supplier_model_query(df_sales, supplier, model)
+
+    # st.write(df_sales)
+    # st.stop()
+
+    return df_sales
+
+def low_inventory_df(datafile_location, forecast_month, supplier, model):
+
+    # --------------- LOAD INVENTORY DATA  ---------------------------
+    df_inventory = (inventory_df(datafile_location)[['SKU', 'SUPPLIER', 'Existing Qty']]
+                    .rename(columns={'Existing Qty': 'WH_QTY'})
+                    )
+
+    # --------------- LOAD FORECAST DATA ---------------------------
+    df_forecast = forecast_df(datafile_location, forecast_month)[['SKU', 'FORECAST']]
+
+    # ------------------- MERGE FORECAST & INVENTORY --------------
+    df = (
+        df_forecast
+        .merge(df_inventory, on='SKU', how='left')
+        .fillna({'WH_QTY': 0, 'FORECAST': 0})
+    )
+
+    # ============ CALCULATE WH STOCK IN MONTH (Avoid divide-by-zero) ============================
+    df['MONTH'] = (df['WH_QTY'] / df['FORECAST'].replace(0, pd.NA)).fillna(0).round(2)
+
+    # =================== FILTER BY SUPPLIER, MODEL AND COLOR ===================================
+    df = utils.supplier_model_query(df, supplier, model)  # query on supplier and model
+
+    prefixes = ('RVA', 'RBX', 'RDM', 'RVP')  # accessories, boxes, dummy faucets, faucet parts
+    df_sink = utils.exclude_sku_prefixes(df, prefixes)
+    df_accessories = df.loc[lambda row: row['SKU'].str.startswith('RVA')]
+
+    df_1m = (df_sink[df_sink['MONTH'] <= 1]
+            .rename(columns={'MONTH': 'stock'})
+             )
+
+    # st.write(df_1m)
+    sku_list = df_1m['SKU'].tolist()
+
+    # st.write(sku_list)
+
+    # get incoming inventory
+    df, _ = weekly_container_arrival_df(datafile_location, supplier, model)
+
+    df = df[df['SKU'].isin(sku_list)]
+
+    # st.write(df)
+
+    df = df[['SKU', 'QTY', 'month']]
+    df = df[df['SKU'] != 0]
+    # st.write(df)
+
+    df_1m = (
+        df_1m
+        .merge(df, on='SKU', how='left')
+        .fillna({'WH_QTY': 0, 'QTY':0, 'FORECAST': 0})
+    )[['SKU', 'FORECAST', 'WH_QTY', 'QTY','month']]
+
+    # df_1m["month"] = df_1m["month"].astype(str)
+
+    # st.write(df_1m)
+
+    # Base table with all SKUs (ensures all SKUs are included)
+    base = df_1m[["SKU", "FORECAST", "WH_QTY"]].drop_duplicates()
+
+    # st.write(base)
+
+    # Replace missing months with a placeholder (optional)
+    df_1m["month"] = df_1m["month"].fillna("")
+
+    #df_1m["month"] = df_1m["month"].astype(str)
+
+    # st.write(df_1m)
+
+    # Pivot table to aggregate quantities by SKU and month
+    pivot = df_1m.pivot_table(
+        index=["SKU"],  # "FORECAST", "WH_QTY"],
+        columns="month",
+        values="QTY",
+        aggfunc="sum",
+        fill_value=0
+    ).reset_index()
+
+    # st.write(pivot)
+
+    result = (
+        base
+        .merge(pivot, on="SKU", how="left")
+        .fillna(0)
+        .sort_values(by="FORECAST", ascending=False)  # 👈 sort after merge
+    )
+
+
+    # st.write(result)
+
+    return result, df_accessories
