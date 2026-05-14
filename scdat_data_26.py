@@ -210,35 +210,61 @@ def amazon_df(datafile_location, month, year):
 
     month_no = utils.get_month_no(month)
 
-    if month_no <= 9:
-        month_no_str = '0' + str(month_no)
-    else:
-        month_no_str = str(month_no)
+    # if month_no <= 9:
+    #     month_no_str = '0' + str(month_no)
+    # else:
+    #     month_no_str = str(month_no)
+
+    month_no_str = f"{month_no:02d}"    # 1 -> 01, 9 -> 09, 10 -> 10
 
     file_path = Path(PureWindowsPath(datafile_location + 'Amazon\\' + year + '_' + month_no_str + '_Amazon.csv'))
 
     # create Amazon df
-    df = pd.read_csv(file_path, encoding='latin-1')
+    df_fba = pd.read_csv(file_path, encoding='latin-1')
 
-    df = df[df['order-status'] == 'Shipped']
+    df = df_fba[df_fba['order-status'] == 'Shipped']        # << ______________ take shipped status only ___________
+
+    if len(df) == 0:    # ___________ required when there is no shipped item ______________________
+        df = df_fba
+        df = df[['sku']]
+        df['quantity'] = 0
+
     df = df[['sku', 'quantity']]
     df = df.loc[lambda row: row['sku'].str.startswith('RV')]
-
-    # st.write(df)
-    # st.stop()
 
     df.columns = (['SKU', 'QTY'])
 
     # remove '-' and '_' from sku
     for r in range(0, len(df)):
-        # sku_long = df.iloc[r][0]
         sku_long = df.iloc[r, 0]
         sku = utils.format_sku(sku_long)
         df.iloc[r, 0] = sku
 
     df = df.groupby('SKU')['QTY'].sum().to_frame().reset_index()
 
+    # st.write(df)
+    # st.stop()
+
     return df
+
+def amazon_fba_nonfba_df(datafile_location, short_month_name, year):
+    month_no = datetime.strptime(short_month_name, "%b").month
+    month_no_str = f"{month_no:02d}"  # 1 -> 01, 9 -> 09, 10 -> 10
+
+    file_path = Path(PureWindowsPath(datafile_location + 'Amazon\\' + year + '_' + month_no_str + '_Amazon.csv'))
+
+    # create Amazon df
+    df = pd.read_csv(file_path, encoding='latin-1')
+    df = df[df['order-status'] == 'Shipped']
+    df = df[df['sku'].str.startswith('RV')]
+
+    df = df[['sku', 'quantity']].rename(columns={'sku': 'SKU', 'quantity': 'FBA QTY'})
+    df = df.groupby('SKU')['FBA QTY'].sum().reset_index()
+
+    df_fba = df[~df['SKU'].str.endswith('-nonFBA')]
+    df_nonfba = df[df['SKU'].str.endswith('-nonFBA')]
+
+    return df_fba, df_nonfba
 
 def zen_df(datafile_location, month, year):
     month_no = utils.get_month_no(month)
@@ -255,8 +281,10 @@ def zen_df(datafile_location, month, year):
 
     df = df.loc[lambda row: row['REF'].str.startswith('C')]  # GET RECORDS STARTS WITH C0015...
 
-    df = df[df["STATUS"] != 'Cancelled']
-    df = df[df["STATUS"] != 'Draft']
+    # df = df[df["STATUS"] != 'Cancelled']
+    # df = df[df["STATUS"] != 'Draft']
+
+    df = df[~df["STATUS"].isin(["Cancelled", "Draft"])]
 
     # filter data for one month
     df['DATE'] = pd.to_datetime(df['DATE'])
@@ -312,6 +340,8 @@ def zen_df(datafile_location, month, year):
     df_new['QTY'] = df_new['QTY'].astype(float)
 
     df_new.index = range(1, df_new.shape[0] + 1)
+
+    # st.write(df_new)
 
     return df_new
 
@@ -889,6 +919,8 @@ def one_month_sales_df(datafile_location, month, year):
     # create Amazon df
     df_amazon = amazon_df(datafile_location, month, year)
 
+    # st.write(df_amazon)
+
     # create oddo df
     df_oddo = zen_df(datafile_location, month, year)
 
@@ -1093,9 +1125,10 @@ def yearly_sales_df(datafile_location, year):
 
 
 def lowes_sales(datafile_location):
-    utils.show_header("Lowe's Sales")
     month_elapsed = utils.get_month_elapsed()
-    st.write('Month Elapsed = ' + str(round(month_elapsed,2)))
+    # st.write('Month Elapsed = ' + str(round(month_elapsed,2)))
+
+    utils.show_header("Lowe's Sales | " + str(round(month_elapsed,2)) + ' - Months')
 
     path = Path(PureWindowsPath(datafile_location + "LOWES\\Lowe's Sales.xlsx"))
     df = pd.read_excel(path, sheet_name='SALES', header=0)
@@ -1103,7 +1136,7 @@ def lowes_sales(datafile_location):
     df['Day'] = df['Day'].dt.strftime('%Y-%m')
     df = df.rename(columns={'Sales Units - TY': 'Sales'})
 
-    df_monthly: object = df.groupby(['Day', 'SKU'])['Sales'].count().to_frame().reset_index()
+    df_monthly: object = df.groupby(['Day', 'SKU'])['Sales'].sum().to_frame().reset_index()
 
     df_monthly['Day'] = df_monthly['Day'].astype(str)
 
@@ -1127,8 +1160,22 @@ def lowes_sales(datafile_location):
 
     # ============ Total Sales & Monthly Sales ==================
     cols = df1.columns[1:]
-    df1['Total'] = df1[cols].sum(axis=1)
-    df1['Monthly'] = round(df1['Total'] / month_elapsed, 0)
+    df1['TOTAL'] = df1[cols].sum(axis=1)
+    df1['MONTHLY'] = round(df1['TOTAL'] / month_elapsed, 0)
+
+    # _______________ Add Lowes Shipments ____________________
+    path = Path(PureWindowsPath(datafile_location + "LOWES\\Inventory Sent to Lowes.xlsx"))
+    df_at_lowes = pd.read_excel(path, sheet_name='Sheet1', header=1)
+    df_at_lowes = df_at_lowes[['SKU', 'TOTAL SENT']]
+    df_at_lowes = df_at_lowes[df_at_lowes['SKU'] != 'TOTAL']
+
+
+
+    df1 = pd.merge(df1, df_at_lowes, on=["SKU"], how='outer')
+    df1['AT LOWES'] = df1['TOTAL SENT'] - df1['TOTAL']
+    df1 = df1.drop(columns=['TOTAL SENT'])
+
+    # st.write(df_at_lowes)
 
     # ======================== ADD INVENTORY ===================================
     df_inventory = inventory_df(datafile_location)
@@ -1148,13 +1195,23 @@ def lowes_sales(datafile_location):
 
     df1 = pd.merge(df1, df_incoming, on=["SKU"], how='left')
 
+    df1 = df1.fillna(0)# AgGrid(df1, height=270)
+
+    df1['STOCK'] = round((df1['AT LOWES'] + df1['WH'] + df1['INCOMING'])/df1['MONTHLY'], 2)
     # =======================+ ADD TOTAL ROW & SHOW TABLE ================================
     df1.loc['Total'] = df1.sum(numeric_only=True)
-    df1.loc['Total', df1.columns[0]] = 'TOTAL'
+    # df1.loc['Total'] = df1.drop(columns=['STOCK']).sum(numeric_only=True)
 
-    AgGrid(df1, height=270)
-    utils.download_csv(df1, 'Download')
-    return
+    df1.loc['Total', df1.columns[0]] = 'TOTAL'
+    df1['STOCK'] = df1['STOCK'].fillna(0)
+    
+    # ____________ convert the value of STOCK in the TOTAL row _______________________
+    total_idx = df1['SKU'] == 'TOTAL'
+    df1.loc[total_idx, 'STOCK'] = (
+        (df1.loc[total_idx, 'AT LOWES'] + df1.loc[total_idx, 'WH'] + df1.loc[total_idx, 'INCOMING'])/ df1.loc[total_idx, 'MONTHLY']
+    ).round(2)
+
+    return df1
 
 def inventory_level_projection_df_OLD(datafile_location, current_month, current_year, forecast_month, supplier, model):
 

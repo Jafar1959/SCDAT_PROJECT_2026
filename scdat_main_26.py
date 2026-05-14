@@ -19,11 +19,12 @@ import scdat_cargo_control_dashboard as cc
 import scdat_sales_forecast_dashboard_26 as sfd
 import scdat_inventory_count_26 as inv_count
 import scdat_product_chit_26 as chit
+import scdat_sales_analysis_26 as sa
 
 # ============= my variables =========================
-CURRENT_MONTH = 'Apr'
+CURRENT_MONTH = 'May'
 CURRENT_YEAR = '2026'
-FORECAST_MONTH = '04_Apr-2026'
+FORECAST_MONTH = '05_May-2026'
 SUPPLIERS = ['ALL',
             'Aquacubic',
             'Bomeijia',
@@ -193,7 +194,7 @@ def opening_dashboard(datafile_location):
     # display image at the center of the screen
     image_path = Path(PureWindowsPath(datafile_location + "Images\\SCDAT2.png"))
 
-    col1, col2, col3, col4 = st.columns([0.5, 2, 1.3, 0.1])
+    col1, col2, col3, col4 = st.columns([0.5, 2, 1.4, 0.1])
 
     with col2:
         st.image(str(image_path), width=750)
@@ -236,6 +237,7 @@ def display_choices():
             "items": [
                 "Select Choice",
                 "Inventory",
+                "One Month Sales",
                 "Sales Forecast",
                 "Sales Trend",
                 "Sales Anatomy",
@@ -278,15 +280,16 @@ def display_choice2(choice1):
         """, unsafe_allow_html=True)
 
     actions = {
-        "Select Choice": under_construction,
+        "Select Choice": lambda : sa.current_month_sales_graph(DATAFILE_LOCATION, FORECAST_MONTH, SUPPLIERS),
+        "One Month Sales": lambda: sa.display_one_month_sales(DATAFILE_LOCATION),
         "Inventory": lambda: sfd.inventory_distribution_pie_summary(DATAFILE_LOCATION, FORECAST_MONTH, SUPPLIERS),
         "Sales Trend": lambda: fg.sales_trend_graph(DATAFILE_LOCATION, SUPPLIERS, FORECAST_MONTH),
         "Backorder List": lambda: bk.backorder_analysis(DATAFILE_LOCATION),
-        "Sales Anatomy": lambda: sfd.sales_anatomy_dashboard(DATAFILE_LOCATION),
+        "Sales Anatomy": lambda: sa.sales_anatomy_dashboard(DATAFILE_LOCATION),
         "Inventory Count - Step 1": lambda: inv_count.display_recount_list(DATAFILE_LOCATION),
         "Inventory Count - Step 2": inv_count.display_recount_analysis,
         "Product Chit": lambda: chit.display_product_chit(DATAFILE_LOCATION),
-        "Lowes Sales": lambda: data.lowes_sales(DATAFILE_LOCATION),
+        "Lowes Sales": lambda: fg.lowes_sales(DATAFILE_LOCATION),
         "Test": fg.test,
     }
 

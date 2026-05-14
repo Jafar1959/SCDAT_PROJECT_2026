@@ -81,28 +81,66 @@ def scan_data_wh_filter(df, wh):
 
 
 def get_zen_inventory(datafile_location, wh):
+    # --------------- create dataframe from WH_Inventory_Qty.csv --------------------------
+    file_path = Path(PureWindowsPath(datafile_location + "Inventory\\WH_Inventory_Qty.csv"))
+    df_wh = pd.read_csv(file_path)
+
+    # -------------- Change column name & select columns ------------------------------
+    df_wh = df_wh.rename(columns={
+        'Product/Internal Reference': 'SKU',
+        'Location': 'LOCATION',
+        'Inventoried Quantity': 'QTY'
+    })[['SKU', 'LOCATION', 'QTY']]
+
+    # ---------------- exclude locations and remove blank SKUs ------------------------
+    excluded_locations = [
+        'AMZ/Stock',
+        'WH1/Output',
+        'WH1/Quality Check',
+        'WH1/Stock',
+        'WH1/Stock/DAMAGED',
+        'WH1/Stock/Virtual-WH5'
+    ]
+
+    df_wh = df_wh[
+        ~df_wh['LOCATION'].isin(excluded_locations) & df_wh['SKU'].notna()
+        ]
+
+    df_wh = df_wh.rename(columns={'LOCATION': 'WH_LOCATION'})
+
+    # -------------------- get location string only --------------------------------------------------
+    df_wh['LOCATION'] = df_wh['WH_LOCATION'].str.rsplit('/', n=1).str[-1]
+
+    prefixes = (
+        'RVA',  # accessories
+        # 'RVP',  # faucet parts
+        'RDM',  # dummy faucet
+        'RBX',  # packing boxes
+        # 'RVF',  # faucets
+        # 'RVB6',  # bathtubs
+        'OPEN-BOX'  # openbox
+    )
+
+    df_wh = utils.exclude_sku_prefixes(df_wh, prefixes)
+    df_wh = df_wh.loc[lambda row: ~ row['SKU'].str.endswith('-REFURB')]
+
+    # st.write(df_wh)
+    # st.stop()
     # get warehouse-wise inventory
-    get_df = data.wh_wise_inventory_df(datafile_location)
+    # get_df = data.wh_wise_inventory_df(datafile_location)
 
     if wh == 'WH1':
-        df = get_df[1]
+        df = df_wh[df_wh['LOCATION'].str.startswith(('P', 'Q', 'P-R'))]
 
     elif wh == 'WH2':
-        df = get_df[2]
+        df = df_wh[df_wh['LOCATION'].str.startswith(('G', 'H', 'F-F'))]
 
     elif wh == 'WH4':
-        df = get_df[4]
+        df = df_wh[df_wh['LOCATION'].str.startswith(('J', 'K', 'L-F'))]
 
     df = df[['SKU', 'LOCATION', 'QTY']]
 
-    # if wh == 'WH2':
-    #     # df['LOCATION'] = df.apply(lambda x: str(x.iloc[1])[18:len(x.iloc[1])], axis=1)  # remove 'WH1/Stock/Houston/' from location
-    #     df['LOCATION'] = df.apply(lambda x: str(x.iloc[1]).rsplit('/', 1)[-1], axis=1)  # get text only after last '/'
-    #
-    # else:
-    #     # df['LOCATION'] = df.apply(lambda x: str(x.iloc[1])[17:len(x.iloc[1])], axis=1)  # remove 'WH1/Stock/Austin/' from location
-
-    df['LOCATION'] = df.apply(lambda x: str(x.iloc[1]).rsplit('/', 1)[-1], axis=1)  # get text only after last '...../G11J1'
+    # df['LOCATION'] = df.apply(lambda x: str(x.iloc[1]).rsplit('/', 1)[-1], axis=1)  # get text only after last '...../G11J1'
 
     df = df.sort_values(['LOCATION', 'SKU'], ascending=[True, True])
     df.reset_index(drop=True, inplace=True)

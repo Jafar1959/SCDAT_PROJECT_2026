@@ -177,13 +177,13 @@ def supplier_model_query(df, supplier, model):
 
     return df
 
-def show_header(txt):
+def show_header(txt, top_margin = "-45px"):
 
     st.markdown(f"""
-                    <div style="font-size:24px; color: #DAA520; font-family: Book Antiqua; font-weight:bold; margin-bottom:0px; margin-top:-45px;">
+                    <div style="font-size:24px; color: #DAA520; font-family: Book Antiqua; font-weight:bold; margin-bottom:0px; margin-top:{top_margin};">
                         {txt}
                     </div>
-                    <hr style="border: 1px groove #EEB422;  width: 97.5%; margin-top:0px; margin-bottom:35px;">
+                    <hr style="border: 1px groove #EEB422;  width: 97.5%; margin-top:0px; margin-bottom:5px;">
                     """, unsafe_allow_html=True)
     return
 

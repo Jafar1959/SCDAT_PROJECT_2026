@@ -444,7 +444,7 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
 
     supplier = st.sidebar.selectbox("SUPPLIER", supplier)
 
-    utils.show_header(supplier + ' Sales Trend')
+    utils.show_header(supplier + ' Sales Trend || ' + utils.get_todays_date())    # _______ Page 1 _______________________________
 
     model = st.sidebar.text_input("MODEL / COLOR", "ALL")
 
@@ -475,6 +475,7 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
     df_sales_summary = df_sales_summary[df_sales_summary['MONTH'].isin(month_list)]
 
     # st.write(df_sales_summary)
+    # st.write(df_sales_summary.iloc[-1, 1])
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=df_sales_summary['MONTH'],
@@ -490,6 +491,42 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
                              line={'dash': 'solid', 'color': 'blue'},
                              name="12M RUNNING AVG",
                              ))
+
+    fig.add_annotation(
+        x=len(df_sales_summary)-1,
+        y=df_sales_summary.iloc[-1, 1],    # value of 2nd col and last row
+        text=str(utils.format_num(round(df_sales_summary.iloc[-1, 1], 0))),
+        showarrow=False,
+        yshift=10,
+        font=dict(
+            color="maroon",
+            size=14,
+            family="Arial Black")
+        )
+
+    fig.add_annotation(     # _____________ show first value of running average ____________
+        x = len(df_sales_summary)-12,
+        y = df_sales_summary.iloc[-12, 2],   # value of 3rd col and last row
+        text = str(utils.format_num(round(df_sales_summary.iloc[-12, 2], 0))),
+        showarrow = False,
+        yshift=10,
+        font=dict(
+            color="blue",
+            size=14,
+            family="Arial Black")
+            )
+
+    fig.add_annotation( # _____________ show last value last value of running average _______________
+        x=len(df_sales_summary) - 1,
+        y=df_sales_summary.iloc[-1, 2],  # value of 3rd col and last row
+        text=str(utils.format_num(round(df_sales_summary.iloc[-1, 2], 0))),
+        showarrow=False,
+        yshift=10,
+        font=dict(
+            color="blue",
+            size=14,
+            family="Arial Black")
+        )
 
     # get forecast data ===============================================================================
     values1 = data.forecast_trend_df(datafile_location, supplier, model, month_list)
@@ -583,7 +620,7 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
                     display:inline-block;
                     border:1px solid #CFCFCF;
                     padding:2px 6px;
-                    border-radius:12px;
+                    border-radius:10px;
                     font-family: Arial Bold;
                     color:{color[i]};
                     text-align:center;
@@ -601,15 +638,15 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
     col1, col2 = st.columns([3, 0.15])
     with col1:
 
-        fig.update_layout(legend=dict(title_font_family="Book Antiqua", font=dict(size=13), x=0.1, y=0.9))
+        fig.update_layout(legend=dict(title_font_family="Book Antiqua", font=dict(size=13), x=0.15, y=1.0))
         fig.update_layout(width=340, height=410, margin=dict(l=0, r=0, b=0, t=0))
 
         st.plotly_chart(fig, width='stretch')
 
-    # ====================== DISPLAY INVENTORY, IN-OCEAN & WEEKLY ARRIVAL =======================================================================
+    # -------------------- DISPLAY INVENTORY, IN-OCEAN & WEEKLY ARRIVAL --------------------------------------------------
     # col_m, col_n, col_o, col_p = st.columns([1, 0.7, 1, 0.1])
     col3, col4, col5, col6 = st.columns([1, 0.7, 1, 0.1])
-    with col3:
+    with col3:      # ______________ Display Inventory Mix _______________________
         txt = 'Warehouse Inventory Mix'
         st.markdown(
             f'<p style="font-family: Book Antiqua; color: {color_hex(306)}; text-align:left; font-size: 18px ;border-radius:1%;'
@@ -617,21 +654,21 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
 
         sfd.inventory_dashboard(datafile_location, forecast_month, supplier, model)
 
-    with col4:
+    with col4:      # _______________ Display In-ocean & Received Qty ________________
         txt = 'In-ocean & Received Quantity'
         st.markdown(
             f'<p style="font-family: Book Antiqua; color: {color_hex(306)}; text-align:left; font-size: 18px ;border-radius:1%;'
             f' line-height:0em; margin-top:5px"> {txt} </p>', unsafe_allow_html=True)
 
-        values = container_loading_graph(datafile_location, supplier, model)
-        df_ocean = values[0]
+        df_ocean, df_received = container_loading_graph(datafile_location, supplier, model)
+        # df_ocean = values[0]
 
         # st.write(df_ocean)
         # utils.download_csv(df_ocean, 'df_ocean')
 
-        df_received = values[1]
+        # df_received = values[1]
 
-    with col5:
+    with col5:      # _______________ Display Weekly Container Arrival ________________________
 
         fig, fig1 = weekly_container_arrival_chart(datafile_location, supplier, model)
 
@@ -642,11 +679,12 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
 
         st.plotly_chart(fig, width='stretch')
 
-    utils.show_header(supplier)
+    # -------------------- DISPLAY Inventory < 1 Month, Container Arrival Schedule, Weekly Projection --------------------
+    utils.show_header(supplier + ' ... p/2', top_margin = "15px")       # _______________ Page 2 _________________________
 
     col7, col8, col9, col10 = st.columns([1, 0.7, 1, 0.1])
 
-    with col7:
+    with col7:      # _________________ Inventory < 1-Month Forecast ______________________________________
         df_low, _ = data.low_inventory_df(datafile_location, forecast_month, supplier, model)
         # st.write(df_low)
 
@@ -678,55 +716,50 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
 
         fig.update_layout(height=500, margin=dict(l=0, r=0, b=0, t=0))
 
-    with col7:
         txt = 'Inventory < 1 Month Forecast | Total SKU: ' + str(len(df_low))
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown(
             f'<p style="font-family: Book Antiqua; color: {color_hex(306)}; text-align:left; font-size: 18px ;border-radius:1%;'
-            f' line-height:0em; margin-top:25px"> {txt} </p>', unsafe_allow_html=True)
+            f' line-height:0em; margin-top:4px"> {txt} </p>', unsafe_allow_html=True)
 
         st.plotly_chart(fig, width='stretch')
 
-        utils.download_csv(df_low, 'Download Low')
 
-    with col8:
+    with col8:      # _______________________ Container Arrival Schedule ____________________________
         txt = 'Container Arrival Schedule'
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown(
                 f'<p style="font-family: Book Antiqua; color: {color_hex(306)}; text-align:left; font-size: 18px ;border-radius:1%;'
-                f' line-height:0em; margin-top:25px"> {txt} </p>', unsafe_allow_html=True)
+                f' line-height:0em; margin-top:4px"> {txt} </p>', unsafe_allow_html=True)
 
         st.plotly_chart(fig1, width='stretch')
 
 
-    with col9:
+    with col9:      # ____________________ Weekly Inventory Projection ____________________________________
         txt = 'Weekly Inventory Projection'
         st.markdown(
             f'<p style="font-family: Book Antiqua; color: {color_hex(306)}; text-align:left; font-size: 18px ;border-radius:1%;'
-            f' line-height:0em; margin-top:25px"> {txt} </p>', unsafe_allow_html=True)
+            f' line-height:0em; margin-top:28px"> {txt} </p>', unsafe_allow_html=True)
 
         inventory_level_projection_graph(datafile_location, supplier, model)
 
-
-
     # ==================== DISPLAY DOWNLOAD LINKS =====================================================
-    col_w, col_x, col_y, col_z = st.columns([1, 1, 1, 1])
-    with col_w:
-        utils.download_csv(df_sales_sku, 'Download Sales')
-        utils.download_csv(df_ocean, 'Download Container In-Ocean')
+    txt = 'Data Download Links _______________________'
+    st.markdown(
+        f'<p style="font-family: Book Antiqua; color: {color_hex(306)}; text-align:left; font-size: 18px ;border-radius:1%;'
+        f' line-height:0em; margin-top:28px"> {txt} </p>', unsafe_allow_html=True)
 
-    with col_x:
-        utils.download_csv(df_sink_sku, 'Download Forecast')
-        utils.download_csv(df_received, 'Download Container Received')
+    utils.download_csv(df_sales_sku, 'Download Sales Data')
+    utils.download_csv(df_sink_sku, 'Download Forecast Data')
 
-    with col_y:
-        utils.download_csv(df_loading, 'Download Shipment')
+    utils.download_csv(df_ocean, 'Download Container In-Ocean')
+    utils.download_csv(df_received, 'Download Container Received')
 
-    with col_z:
-        utils.download_csv(df_received, 'Download Received')
 
-    # end = time.perf_counter()  # stop runtime counter
-    # st.sidebar.write(f"Runtime: {end - start:.2f} seconds")  # show runtime seconds
+    utils.download_csv(df_loading, 'Download Monthly Shipment Data')
+    utils.download_csv(df_received, 'Download Monthly Received Data')
+
+    utils.download_csv(df_low, 'Download Low Inventory')
 
     return
 
@@ -960,17 +993,17 @@ def weekly_container_arrival_chart(datafile_location, supplier, model):
 
 def inventory_level_projection_graph(datafile_location, supplier, model):   #df, supplier, avg_sales_per_week, current_month_sales):
     supplier_limits = {
-        'ALL': 50000,
+        'ALL': 60000,
         'Aquacubic': 2500,
         'Bomeijia': 600,
         'Carysil': 150,
         'Changie': 300,
         'Elleci': 5000,
         'Galassia': 500,
-        'Nicos': 250,
+        'Nicos': 300,
         'Plados': 300,
         'Speed': 30000,
-        'Speed Vietnam': 9000,
+        'Speed Vietnam': 12000,
         'Stile Libero': 1250,
         'UAE Fireclay': 250,
         'Wisdom': 70,
@@ -989,8 +1022,11 @@ def inventory_level_projection_graph(datafile_location, supplier, model):   #df,
 
     df_inventory = utils.exclude_sku_prefixes(df_inventory, prefixes)
 
+    # st.write(df_inventory)
+
     total_inventory = df_inventory['Existing Qty'].sum()
 
+    # st.write(total_inventory)
 
     df, df_sum = data.weekly_container_arrival_df(datafile_location, supplier, model)
     df_sum = df_sum[['month_week', 'QTY']]
@@ -1086,8 +1122,9 @@ def inventory_level_projection_graph(datafile_location, supplier, model):   #df,
                           size=15,
                           color='black'),
                       )
-    fig.update_layout(height=360, margin=dict(l=0, r=0, b=0, t=0))
+    fig.update_layout(height=400, margin=dict(l=0, r=0, b=0, t=0))
     st.plotly_chart(fig, width='stretch')
+
     # st.write(df_sum)
 
     return fig
@@ -1115,6 +1152,49 @@ def inventory_level_projection_table_OLD(datafile_location, current_month, curre
     fig2 = inventory_level_projection_graph(df, supplier, avg_sales_per_week, current_month_sales)
 
     return fig2, df
+
+def lowes_sales(datafile_location):
+    df = data.lowes_sales(datafile_location)
+
+    # Create font color list based on STOCK condition
+    font_colors = []
+    for col in df.columns:
+        if col == 'STOCK':
+            font_colors.append(['red' if val < 10.5 else 'black' for val in df[col]])
+        else:
+            font_colors.append(['black'] * len(df))
+
+    # Create Plotly table
+    fig = go.Figure(data=[go.Table(
+        header=dict(
+            values=list(df.columns),
+            fill_color=[color_hex(97)],
+            line_color='white',
+            font_color='white',
+            font_size=16,
+            height=35,
+            align=['left', 'center'],
+        ),
+
+        cells=dict(
+            values=[df[col] for col in df.columns],
+            font_size=16,
+            height=40,
+            font=dict(color=font_colors),  # <-- apply conditional font colors
+            fill_color=[['white', '#f2f2f2'] * (len(df) // 2 + 1)],
+            align=['left', 'center']
+        )
+    )])
+
+    col1, col2 = st.columns([4.7, 0.1])
+
+    with col1:
+        fig.update_layout(height=370, margin=dict(l=0, r=0, b=0, t=0))
+
+        st.plotly_chart(fig, width='stretch')
+        utils.download_csv(df, 'Download')
+
+    return
 
 
 def test():
