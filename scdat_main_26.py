@@ -9,8 +9,10 @@ from PIL import Image
 import time
 
 
-from scdat_colors_26 import color_hex
+# from scdat_colors_26 import color_hex
 import scdat_utils_26 as utils
+from scdat_utils_26 import color_hex
+
 import scdat_figures_26 as fg
 import scdat_data_26 as data
 import scdat_backorder_26 as bk
@@ -20,11 +22,15 @@ import scdat_sales_forecast_dashboard_26 as sfd
 import scdat_inventory_count_26 as inv_count
 import scdat_product_chit_26 as chit
 import scdat_sales_analysis_26 as sa
+import scdat_packing_box_order_26 as box
+import scdat_sales_trend_26 as trend
+import scdat_inventory_monitoring_26 as im
+
 
 # ============= my variables =========================
-CURRENT_MONTH = 'May'
+CURRENT_MONTH = 'Jul'
 CURRENT_YEAR = '2026'
-FORECAST_MONTH = '05_May-2026'
+FORECAST_MONTH = '07_Jul-2026'
 SUPPLIERS = ['ALL',
             'Aquacubic',
             'Bomeijia',
@@ -237,8 +243,10 @@ def display_choices():
             "items": [
                 "Select Choice",
                 "Inventory",
+                "Inventory Monitoring",
                 "One Month Sales",
                 "Sales Forecast",
+                "Sales Report",
                 "Sales Trend",
                 "Sales Anatomy",
                 "Product Chit",
@@ -246,6 +254,7 @@ def display_choices():
                 "Lowes Sales",
                 "Inventory Count - Step 1",
                 "Inventory Count - Step 2",
+                "Box Order Qty",
                 "Test"
             ],
             "handler": display_choice2
@@ -283,13 +292,17 @@ def display_choice2(choice1):
         "Select Choice": lambda : sa.current_month_sales_graph(DATAFILE_LOCATION, FORECAST_MONTH, SUPPLIERS),
         "One Month Sales": lambda: sa.display_one_month_sales(DATAFILE_LOCATION),
         "Inventory": lambda: sfd.inventory_distribution_pie_summary(DATAFILE_LOCATION, FORECAST_MONTH, SUPPLIERS),
-        "Sales Trend": lambda: fg.sales_trend_graph(DATAFILE_LOCATION, SUPPLIERS, FORECAST_MONTH),
-        "Backorder List": lambda: bk.backorder_analysis(DATAFILE_LOCATION),
+        "Inventory Monitoring": lambda: im.display_inventory_monitoring(DATAFILE_LOCATION, SUPPLIERS),
+        "Sales Report": lambda: sa.display_sales_report_monthly(DATAFILE_LOCATION),
+        "Sales Trend": lambda: trend.sales_trend_graph(DATAFILE_LOCATION, SUPPLIERS, FORECAST_MONTH),
         "Sales Anatomy": lambda: sa.sales_anatomy_dashboard(DATAFILE_LOCATION),
+        "Sales Forecast": lambda: sf.holtwinter_forecast(DATAFILE_LOCATION),
+        "Backorder List": lambda: bk.backorder_analysis(DATAFILE_LOCATION),
         "Inventory Count - Step 1": lambda: inv_count.display_recount_list(DATAFILE_LOCATION),
         "Inventory Count - Step 2": inv_count.display_recount_analysis,
         "Product Chit": lambda: chit.display_product_chit(DATAFILE_LOCATION),
         "Lowes Sales": lambda: fg.lowes_sales(DATAFILE_LOCATION),
+        "Box Order Qty": lambda: box.display_box_order_qty(DATAFILE_LOCATION, SUPPLIERS, FORECAST_MONTH),
         "Test": fg.test,
     }
 

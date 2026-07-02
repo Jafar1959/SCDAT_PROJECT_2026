@@ -113,9 +113,12 @@ def product_df(datafile_location):
     file_path = Path(PureWindowsPath(datafile_location + "Inventory\\Product_List.xlsx"))
     df = pd.read_excel(file_path, sheet_name='Sheet1', header=0)
 
-    # remove discontinued items
-    df = df[df["Status"] != 'Discontinued']
-    df = df[df["Status"] != 'ON HOLD']
+    # Remove discontinued and on-hold items
+    df = df.loc[~df["Status"].isin(["Discontinued", "ON HOLD"])]
+
+    # df = df[df["Status"] != 'Discontinued']
+    # df = df[df["Status"] != 'ON HOLD']
+
 
     df = df[['Model', 'Supplier', 'Material', 'Product', 'Mounting', 'Bowl', 'Collection', 'FBA', 'Status']]
     df.columns = (['SKU', 'SUPPLIER', 'MATERIAL', 'PRODUCT', 'MOUNTING', 'BOWL', 'COLLECTION', 'FBA', 'STATUS'])
@@ -144,7 +147,6 @@ def inventory_df(datafile_location):
 
     df_inventory['SKU'] = df_inventory.apply(lambda x: x.iloc[0].strip(), axis=1)   # remove space from SKU
 
-    # df_inventory = df_inventory.fillna('VOID')
 
     # remove the SKU that does not start with RV
     df_inventory = df_inventory.loc[lambda row: row['SKU'].str.startswith('RV')]
@@ -152,6 +154,8 @@ def inventory_df(datafile_location):
     df_product = product_df(datafile_location)
 
     df = pd.merge(df_product, df_inventory, on=["SKU"], how='left')
+    df = df.fillna(0)
+
 
     df = df.sort_values('SKU', ascending=True)
 
@@ -210,40 +214,38 @@ def amazon_df(datafile_location, month, year):
 
     month_no = utils.get_month_no(month)
 
-    # if month_no <= 9:
-    #     month_no_str = '0' + str(month_no)
-    # else:
-    #     month_no_str = str(month_no)
-
     month_no_str = f"{month_no:02d}"    # 1 -> 01, 9 -> 09, 10 -> 10
 
     file_path = Path(PureWindowsPath(datafile_location + 'Amazon\\' + year + '_' + month_no_str + '_Amazon.csv'))
 
-    # create Amazon df
-    df_fba = pd.read_csv(file_path, encoding='latin-1')
+    # _______________ Read Data File ___________________________
+    df_fba = (pd.read_csv(file_path,
+                         encoding='latin-1',
+                         usecols = ['order-status', 'sku', 'quantity']
+                          )
+             )
 
-    df = df_fba[df_fba['order-status'] == 'Shipped']        # << ______________ take shipped status only ___________
+    # ______________ Get Shipped Status Only ___________________
+    df = df_fba[df_fba['order-status'] == 'Shipped']
 
-    if len(df) == 0:    # ___________ required when there is no shipped item ______________________
+    # ___________ If there is no Shipped SKU, Get the SKUs and Qty Zero. Generally happens on the first day of the month _____
+    if len(df) == 0:
         df = df_fba
         df = df[['sku']]
         df['quantity'] = 0
 
+    # __________ Use Columns 'Sku' and 'quantity' Only ______________________
     df = df[['sku', 'quantity']]
-    df = df.loc[lambda row: row['sku'].str.startswith('RV')]
+    df = df.loc[lambda row: row['sku'].str.startswith('RV', na=False)]
+    df = df.rename(columns={'sku': 'SKU', 'quantity': 'QTY'})
 
-    df.columns = (['SKU', 'QTY'])
-
-    # remove '-' and '_' from sku
+    # _________ remove '-' and '_' from sku ___________________________
     for r in range(0, len(df)):
         sku_long = df.iloc[r, 0]
         sku = utils.format_sku(sku_long)
         df.iloc[r, 0] = sku
 
     df = df.groupby('SKU')['QTY'].sum().to_frame().reset_index()
-
-    # st.write(df)
-    # st.stop()
 
     return df
 
@@ -407,7 +409,7 @@ def wh_wise_inventory_df(datafile_location):
     df_retail = df_wh[df_wh['SKU'].isin(retail_models)]
 
     prefixes = (
-        'RVA',  # accessories
+        'RVA',  # all accessories
         'RVP',  # faucet parts
         'RDM',  # dummy faucet
         'RBX',  # packing boxes
@@ -416,7 +418,9 @@ def wh_wise_inventory_df(datafile_location):
         'OPEN-BOX'  # openbox
         )
 
-    df_sink = utils.exclude_sku_prefixes(df_wh, prefixes)
+    # df_sink = utils.exclude_sku_prefixes(df_wh, prefixes)   # get sinks only
+
+    df_sink = df_wh[~df_wh["SKU"].str.startswith(prefixes, na=False)]       # get sinks only
     df_sink = df_sink.loc[lambda row: ~ row['SKU'].str.endswith('-REFURB')]     # remove refurb skus
 
     # st.write(df_sink)
@@ -962,7 +966,7 @@ def one_month_sales_df(datafile_location, month, year):
     return df
 
 
-def price_list_df(datafile_location):
+def price_list_df_OLD(datafile_location):
 
     file_path = Path(PureWindowsPath(datafile_location + "Inventory\\Inventory.csv"))
     df = pd.read_csv(file_path, header=0)
@@ -980,6 +984,28 @@ def price_list_df(datafile_location):
 
     return df
 
+
+def price_list_df(datafile_location):
+    file_path = Path(PureWindowsPath(f"{datafile_location}Inventory\\Inventory.csv"))
+
+    df = pd.read_csv(
+        file_path,
+        usecols=['Internal Reference', 'Sales Price']
+    )
+
+    return (
+        df.rename(columns={
+            'Internal Reference': 'SKU',
+            'Sales Price': 'PRICE'
+        })
+        .dropna(subset=['SKU', 'PRICE'])
+        .loc[
+            lambda df: (
+                (df['PRICE'] != 0) &
+                (df['SKU'].str.startswith('RV'))
+            )
+        ]
+    )
 
 def sales_anatomy_df(datafile_location, month, year):
     df_price = price_list_df(datafile_location)
@@ -1522,21 +1548,19 @@ def weekly_container_arrival_df(datafile_location, supplier, model):
 
 
 def get_date_parts():
-    # today = pd.to_datetime("2026-03-31")      # test case
     today = date.today()
     back_30_date = today - timedelta(days=30)
-
-    # st.write(today)
-    # st.write(back_30_date)
 
     return calendar.month_abbr[today.month], today.year, today.day, calendar.month_abbr[back_30_date.month], back_30_date.year, back_30_date.day
 
 def last_30_days_sales_df(datafile_location, supplier, model):
-    # unpack data
+    # _____________ unpack data ________________________
     current_month, current_year, current_date, back_30_month, back_30_year, back_30_date = get_date_parts()
 
     # get sales data
     current = str(current_month) + '-' + str(current_year)
+    # st.write(current)
+    # st.stop()
 
     df_current = (one_month_sales_df(datafile_location, current_month, str(current_year))
                   .loc[:, ['SKU', 'SUPPLIER', 'TOTAL']]
@@ -1567,8 +1591,6 @@ def last_30_days_sales_df(datafile_location, supplier, model):
 
         df_sales['30_Day_Sale'] = round(df_sales[current] * 30/(current_date-1), 0)     # use one day less
 
-    # df_sales['Weekly_Sale'] = round(df_sales['30_Day_Sale'] * 7/30, 2)
-
     df_sales = utils.supplier_model_query(df_sales, supplier, model)
 
     # st.write(df_sales)
@@ -1596,11 +1618,14 @@ def low_inventory_df(datafile_location, forecast_month, supplier, model):
     # ============ CALCULATE WH STOCK IN MONTH (Avoid divide-by-zero) ============================
     df['MONTH'] = (df['WH_QTY'] / df['FORECAST'].replace(0, pd.NA)).fillna(0).round(2)
 
-    # =================== FILTER BY SUPPLIER, MODEL AND COLOR ===================================
+    # __________________ FILTER BY SUPPLIER, MODEL AND COLOR ____________________________
     df = utils.supplier_model_query(df, supplier, model)  # query on supplier and model
 
     prefixes = ('RVA', 'RBX', 'RDM', 'RVP')  # accessories, boxes, dummy faucets, faucet parts
     df_sink = utils.exclude_sku_prefixes(df, prefixes)
+
+    # ________________ Remove rows If SKU has BOTH NaN + empty strings ________________________
+    df = df[df['SKU'].notna() & (df['SKU'].str.strip() != '')]
     df_accessories = df.loc[lambda row: row['SKU'].str.startswith('RVA')]
 
     df_1m = (df_sink[df_sink['MONTH'] <= 1]
@@ -1667,3 +1692,66 @@ def low_inventory_df(datafile_location, forecast_month, supplier, model):
     # st.write(result)
 
     return result, df_accessories
+
+
+def quarterly_revenue_df(datafile_location):
+    path = datafile_location + 'Sales\\Monthly_Sales\\MONTHLY'
+    source_files = os.listdir(Path(PureWindowsPath(path)))
+
+    source_files.sort()
+
+    df_price = price_list_df(datafile_location)     # << <<<<<<<<<<<<<<<<<
+    df_price = df_price.loc[~df_price['SKU'].str.startswith(('RVA', 'RVP'))]
+    df_price = df_price.loc[~df_price['SKU'].str.endswith('-REFURB')]
+
+
+    for i in range(0, len(source_files)):
+
+        file_path = path + '\\' + str(source_files[i])
+
+        # get month name from file name
+        file_name = str(source_files[i])  # get file name
+        month_name = file_name.split('_')  # split file name based on '_'
+
+        month_name = month_name[2][:-4]  # get last portion and remove .csv
+
+        df = (
+               pd.read_csv(
+                   Path(PureWindowsPath(file_path)),
+                   usecols=['SKU', 'SUPPLIER', 'TOTAL']
+               )
+            )
+
+        # _____________ Remove Accessories _________________________________
+        df_sink = df.loc[lambda row: ~ row['SKU'].str.startswith('RVA')]
+
+
+        # ______________ Merge Files _______________________________
+        df_sink = pd.merge(df_sink, df_price, on=["SKU"], how='outer')
+        df_sink = df_sink.fillna(0)
+
+        df_sink['REVENUE'] = df_sink['TOTAL'] * df_sink['PRICE']
+
+        df_sink = df_sink.groupby('SUPPLIER')['REVENUE'].sum().to_frame().reset_index()
+        df_sink = df_sink[df_sink['SUPPLIER'] != 0]
+
+        df2 = df_sink.copy()
+        df2 = df2.rename(columns={'REVENUE': month_name})
+
+        df_revenue=pd.DataFrame({'Month': [month_name],
+                                 'Revenue': [df_sink['REVENUE'].sum()]
+                                 })
+        if i == 0:
+            df1 = df_revenue.copy()
+            df3 = df2.copy()
+        else:
+            df1 = pd.concat([df1, df_revenue])
+            df3 = pd.merge(df3, df2, on=["SUPPLIER"], how='outer')
+
+    df3 = df3.fillna(0)
+
+    st.write(df1)
+    st.write(df3)
+    st.stop()
+
+    return df1, df3

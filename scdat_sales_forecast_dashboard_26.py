@@ -10,7 +10,9 @@ import statistics
 
 import scdat_data_26 as data
 import scdat_utils_26 as utils
-from scdat_colors_26 import color_hex
+from scdat_utils_26 import color_hex
+
+# from scdat_colors_26 import color_hex
 
 def inventory_mix_df(datafile_location, forecast_month, supplier, model):
     # --------------- LOAD INVENTORY DATA  ---------------------------
@@ -243,6 +245,9 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
     # get total forecast quantity for stock calculation << ==========================================
     df_forecast = data.forecast_df(datafile_location, forecast_month)
 
+    # ________________ Remove row If SKU has BOTH NaN + empty strings ____________________________
+    df_forecast = df_forecast[df_forecast['SKU'].notna() & (df_forecast['SKU'].str.strip() != '')]
+
     if len(df_forecast) > 0:
         df_forecast = df_forecast.loc[lambda row: ~ row['SKU'].str.startswith('RVA')]
 
@@ -263,7 +268,7 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
     df_wh2 = values[2]
     df_wh3 = values[3]
     df_wh4 = values[4]
-    df_parts = values[5]
+    df_accessories = values[5]
     df_box = values[6]
     df_refurb = values[7]
     df_l_container = values[8]
@@ -271,11 +276,12 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
     retail_models = values[10]
     df_faucet = values[11]
     df_bathtub = values[12]
+    df_faucet_parts = values[13]
 
     # st.write(df_wh['QTY'].sum())
     total_wh1 = utils.format_num(df_wh1['QTY'].sum())
     total_wh4 = utils.format_num(df_wh4['QTY'].sum())
-    total_parts = utils.format_num(df_parts['QTY'].sum())
+    total_accessories = utils.format_num(df_accessories['QTY'].sum())
     total_wh2 = utils.format_num(df_wh2['QTY'].sum())
     total_box = utils.format_num(df_box['QTY'].sum())
     total_refurb = utils.format_num(df_refurb['QTY'].sum())
@@ -283,6 +289,8 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
     total_l_container = utils.format_num(df_l_container['QTY'].sum())
     total_lowes_model = utils.format_num(df_retail['QTY'].sum())
     total_faucets = utils.format_num(df_faucet['QTY'].sum())
+    total_faucets_parts = utils.format_num(df_faucet_parts['QTY'].sum())
+
     total_bathtubs = utils.format_num(df_bathtub['QTY'].sum())
 
     df_all = pd.DataFrame({'WH1': [total_wh1],
@@ -291,10 +299,11 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
                            'WH4': [total_wh4],
                            'L-CONTAINER': [total_l_container],
                            'REFURBISHED': [total_refurb],
-                           'ACCESSORIES': [total_parts],
+                           'ACCESSORIES': [total_accessories],
                            'PACKING BOX': [total_box],
                            'LOWES MODELS': [total_lowes_model],
                            'FAUCETS': [total_faucets],
+                           'FAUCET PARTS': [total_faucets_parts],
                            'BATHTUBS': [total_bathtubs],
 
                            })
@@ -321,7 +330,8 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
         cells=dict(
 
             values=[df_all['WH1'], df_all['WH2'], df_all['WH3'], df_all['WH4'], df_all['L-CONTAINER'], df_all['REFURBISHED'],
-                    df_all['ACCESSORIES'], df_all['PACKING BOX'], df_all['LOWES MODELS'], df_all['FAUCETS'], df_all['BATHTUBS']],
+                    df_all['ACCESSORIES'], df_all['PACKING BOX'], df_all['LOWES MODELS'], df_all['FAUCETS'], df_all['FAUCET PARTS'],
+                    df_all['BATHTUBS']],
 
             font=dict(family="Arial", size=12, color='black'),
             font_size=14,
@@ -498,11 +508,12 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
         utils.download_csv(values[12], 'Download BATHTUBS')
 
         utils.download_csv(df_l_container, 'Download L-CONTAINER')
-        utils.download_csv(df_parts, 'Download PARTS')
+        utils.download_csv(df_accessories, 'Download PARTS')
         utils.download_csv(df_refurb, 'Download REFURBISHED')
         utils.download_csv(df_box, 'Download PACKING BOX')
 
     return
+
 
 def median_table_OLD(df_sales_and_price):
     df = df_sales_and_price

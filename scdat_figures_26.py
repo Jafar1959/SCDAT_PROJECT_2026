@@ -11,8 +11,10 @@ from plotly.subplots import make_subplots
 from dateutil.relativedelta import relativedelta
 import time
 
-from scdat_colors_26 import color_hex
+## from scdat_colors_26 import color_hex
 import scdat_utils_26 as utils
+from scdat_utils_26 import color_hex
+
 import scdat_data_26 as data
 import scdat_sales_forecast_dashboard_26 as sfd
 
@@ -25,116 +27,6 @@ def get_file_date(path):
     time1 = dt.time()
     return date1, time1
 
-def data_file_status_OLD(datafile_location):
-    # ================= return a plotly table with data file status =================================
-    # get current month number, short month name and year
-    today = datetime.now().date()
-    current_month_no = today.month  # int
-    short_month_name = calendar.month_abbr[current_month_no]    # str
-    current_year = today.year   # int
-
-    # convert month number to two digit - '01', '02' ----------
-    # month_no_str = '0' + str(current_month_no) if current_month_no < 10 else str(current_month_no)
-    month_no_str = f"{current_month_no:02d}"
-
-    # define file path --------------------
-    # file_prefix = str(current_year) + '_' + month_no_str + '_'
-    file_prefix = f"{current_year}_{month_no_str}_"
-
-    file_paths = ['CCS\\CCS_Copy.xlsx',
-                  # 'CCS\\Entry_Summary.csv',
-                  'CCS\\Shipment_Report.xlsx',
-                  'Inventory\\Container.csv',
-                  'Inventory\\Inventory.csv',
-                  'Inventory\\FBA_Inventory.csv',
-                  'Inventory\\WH_Inventory_Qty.csv',
-                  'Inventory\\Inventory_History.xlsx',
-                  'Inventory\\Backorder.csv',
-                  'Inventory\\ZEN_Purchase_Order.csv',
-                  'Inventory\\Returns.csv',
-                  'Inventory\\Return SCAN responses.xlsx',
-                  'Amazon\\' + file_prefix + 'Amazon.csv',
-                  'Oddo\\' + file_prefix + 'Oddo.csv',
-                  'Sales\\Monthly_Sales\\MONTHLY\\' + str(current_year)[2:4] + month_no_str + '_Sales_' + short_month_name +
-                  '-' + str(current_year)[2:4] + '.csv',
-                  'Sales\\Monthly_Sales\\Dealers_Order.csv',
-                  "LOWES\\Lowe's Sales.xlsx",
-                  ]
-
-    # create dataframe with all file path ---------------------------
-    df = pd.DataFrame({})
-    for i in range(0, len(file_paths)):
-        f = file_paths[i].split('\\')
-        folder = f[0]
-
-        file = f[1]
-        if file == 'Monthly_Sales' and f[2] == 'MONTHLY':
-            file = f[3]
-        elif file == 'Monthly_Sales':
-            file = f[2]
-
-        path = Path(PureWindowsPath(datafile_location + file_paths[i]))
-        values = get_file_date(path)
-        date1 = values[0]
-        time1 = values[1]
-        time1_str = str(time1)[0:5]
-
-        d = '0'
-        status = ''
-        if date1 < today:
-            d = str(today - date1).split(' ')
-
-            status = d[0] + ' ' + d[1][:-1] + ' old'
-
-        if d[0] == '0':
-            status = ''
-
-        dt = str(date1).split(' ')
-        date_str = dt[0]
-        df1 = pd.DataFrame({'Folder': [folder],
-                            'File Name': [file],
-                            'Date': [date_str],
-                            'Time': [time1_str],
-                            'Status': [status],
-                            })
-
-        df = pd.concat([df, df1])
-
-    # Add alternating 'color1' and 'color2' values in the rows
-    if len(df) > 1:
-        df['Color'] = ['rgb(245, 255, 250)' if i % 2 == 0 else 'rgb(224, 238, 224)' for i in range(len(df))]
-
-    cols = df.columns
-    # ========== Display Plotly Table ===========================
-    fig = go.Figure(data=[go.Table(
-        columnwidth=[14, 30, 15, 15, 15],
-
-        header=dict(values=[cols[0], cols[1], cols[2], cols[3], cols[4]],
-                    fill_color=[color_hex(196)],
-                    line_color='white',
-                    font_color='black',
-                    font_size=16,
-                    height=35,
-                    align=['left', 'left', 'center', 'center', 'center']),
-        cells=dict(values=[df.Folder, df['File Name'], df.Date, df.Time, df.Status],
-                   font_size=14,
-                   height=35,
-                   fill_color=[df['Color']],
-                   line_color='white',
-                   align=['left', 'left', 'center', 'center', 'left']))
-                ])
-
-    # add outer boarder around the table
-    fig.add_shape(
-        type="rect",
-        xref="paper", yref="paper",
-        x0=0, y0=0, x1=1, y1=1,  # full canvas
-        line=dict(color=color_hex(32), width=3),
-        layer="above"
-        )
-
-    fig.update_layout(height=len(df)*35 + 35, margin=dict(l=0, r=0, b=0, t=0))
-    return fig
 
 def data_file_status(datafile_location):
     today = datetime.now().date()
@@ -254,17 +146,30 @@ def data_file_status(datafile_location):
 
     return fig
 
+
 def container_dashboard(datafile_location):
 
-    # get incoming containers from CCS =====================
+    # ____________ Get incoming containers from CCS ______________________________
     df_ccs = data.ccs_df(datafile_location)
-    df_ccs = df_ccs[df_ccs['Loading Date'] != 'BLANK']
 
-    df_ccs = df_ccs[['CONTAINER NO.', 'FROM', 'Loading Date', 'Delivered Date']]
-    df_ccs = df_ccs.rename(columns={'CONTAINER NO.': 'PO', 'FROM': 'Supplier'})
+    # df_ccs = df_ccs[df_ccs['Loading Date'] != 'BLANK']
+    # df_ccs = df_ccs[['CONTAINER NO.', 'FROM', 'Loading Date', 'Delivered Date']]
+    # df_ccs = df_ccs.rename(columns={'CONTAINER NO.': 'PO', 'FROM': 'Supplier'})
 
-    df_ccs['Loading Date'] = pd.to_datetime(df_ccs['Loading Date'])
-    df_ccs['Loading Date'] = df_ccs['Loading Date'].dt.to_period('M')
+    # df_ccs['Loading Date'] = pd.to_datetime(df_ccs['Loading Date'])
+    # df_ccs['Loading Date'] = df_ccs['Loading Date'].dt.to_period('M')
+
+    df_ccs = (
+        df_ccs.loc[
+            df_ccs['Loading Date'].ne('BLANK'),
+            ['CONTAINER NO.', 'FROM', 'Loading Date', 'Delivered Date']
+        ]
+        .rename(columns={'CONTAINER NO.': 'PO',
+                         'FROM': 'Supplier'})
+    )
+
+    df_ccs['Loading Date'] = pd.to_datetime(df_ccs['Loading Date']).dt.to_period('M')
+
 
     # create month-wise container loading dataframe ========================
     df_loading = df_ccs.groupby(['Loading Date', 'Supplier'])['PO'].count().to_frame().reset_index()
@@ -300,14 +205,17 @@ def container_dashboard(datafile_location):
     # calculate the total in-ocean containers: Loaded = (col 1, 3, 5, 7) - Received (2, 4, 6, 8)
     df2['In-Ocean Container'] = df2.iloc[:, [1, 3, 5, 7, 9]].sum(axis=1) - df2.iloc[:, [2, 4, 6, 8, 10]].sum(axis=1)
 
-    # get total inocean quantity per supplier from container_df ======================
+    # get total in-ocean quantity per supplier from container_df ======================
     values = data.container_df(datafile_location)
     df_ocean = values[0]   # get in-ocean containers only
 
     df_ocean = df_ocean[['PO', 'SKU', 'QTY']]
-    df_ocean = df_ocean.loc[lambda row: ~ row['SKU'].str.startswith('RVA')]     # remove accessories
-    df_ocean = df_ocean.loc[lambda row: ~ row['SKU'].str.startswith('RVP')]     # remove faucet accessories
-    df_ocean = df_ocean.loc[lambda row: ~ row['SKU'].str.startswith('RBX')]     # remove packing box
+    # df_ocean = df_ocean.loc[lambda row: ~ row['SKU'].str.startswith('RVA')]     # remove accessories
+    # df_ocean = df_ocean.loc[lambda row: ~ row['SKU'].str.startswith('RVP')]     # remove faucet accessories
+    # df_ocean = df_ocean.loc[lambda row: ~ row['SKU'].str.startswith('RBX')]     # remove packing box
+
+    prefixes = ('RDM', 'RVA', 'RVP', 'RBX')
+    df_ocean = utils.exclude_sku_prefixes(df_ocean, prefixes)
 
     df_ocean['PO'] = df_ocean['PO'].str[:4]     # keep only 4-digit of PO similar to CCS
 
@@ -358,6 +266,7 @@ def container_dashboard(datafile_location):
     fig.update_layout(width=1565, height=height, margin=dict(l=0, r=0, b=0, t=0))
 
     return fig
+
 
 def monthly_container_loading(datafile_location):
 
@@ -417,7 +326,52 @@ def monthly_container_loading(datafile_location):
 
     return fig, total_container
 
-def sales_trend_graph(datafile_location, supplier, forecast_month):
+
+def lowes_sales(datafile_location):
+    df = data.lowes_sales(datafile_location)
+
+    # Create font color list based on STOCK condition
+    font_colors = []
+    for col in df.columns:
+        if col == 'STOCK':
+            font_colors.append(['red' if val < 10.5 else 'black' for val in df[col]])
+        else:
+            font_colors.append(['black'] * len(df))
+
+    # Create Plotly table
+    fig = go.Figure(data=[go.Table(
+        header=dict(
+            values=list(df.columns),
+            fill_color=[color_hex(97)],
+            line_color='white',
+            font_color='white',
+            font_size=16,
+            height=35,
+            align=['left', 'center'],
+        ),
+
+        cells=dict(
+            values=[df[col] for col in df.columns],
+            font_size=16,
+            height=40,
+            font=dict(color=font_colors),  # <-- apply conditional font colors
+            fill_color=[['white', '#f2f2f2'] * (len(df) // 2 + 1)],
+            align=['left', 'center']
+        )
+    )])
+
+    col1, col2 = st.columns([4.7, 0.1])
+
+    with col1:
+        fig.update_layout(height=370, margin=dict(l=0, r=0, b=0, t=0))
+
+        st.plotly_chart(fig, width='stretch')
+        utils.download_csv(df, 'Download')
+
+    return
+
+
+def sales_trend_graph_OLD(datafile_location, supplier, forecast_month):
 
     # ============== CREATE CHOICES ======================
     # create 36-months name list,start from the previous month
@@ -639,7 +593,7 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
     with col1:
 
         fig.update_layout(legend=dict(title_font_family="Book Antiqua", font=dict(size=13), x=0.15, y=1.0))
-        fig.update_layout(width=340, height=410, margin=dict(l=0, r=0, b=0, t=0))
+        fig.update_layout(height=370, margin=dict(l=0, r=0, b=0, t=0))
 
         st.plotly_chart(fig, width='stretch')
 
@@ -763,7 +717,7 @@ def sales_trend_graph(datafile_location, supplier, forecast_month):
 
     return
 
-def extend_to_four_months(month_list):
+def extend_to_four_months_OLD(month_list):
     # Convert strings to datetime
     dates = [datetime.strptime(m, "%b-%y") for m in month_list]
 
@@ -779,7 +733,7 @@ def extend_to_four_months(month_list):
     # Convert back to required format and limit to 4
     return [d.strftime("%b-%y") for d in dates[:4]]
 
-def _container_loading_prep(df_raw, df_product, supplier, model, exclude_prefixes):
+def _container_loading_prep_OLD(df_raw, df_product, supplier, model, exclude_prefixes):
     df = pd.merge(df_raw, df_product, on=["SKU"], how="left")[
         ["PO", "SKU", "SUPPLIER", "LOADING DATE", "QTY"]
     ]
@@ -790,7 +744,7 @@ def _container_loading_prep(df_raw, df_product, supplier, model, exclude_prefixe
     df["LOADING DATE"] = pd.to_datetime(df["LOADING DATE"]).dt.to_period("M")
     return df
 
-def container_loading_graph(datafile_location, supplier, model):
+def container_loading_graph_OLD(datafile_location, supplier, model):
 
     exclude_prefixes = ('RVA', 'RBX', 'RDM', 'RVP')  # accessories, packing boxes, dummy faucet & faucet parts
 
@@ -908,7 +862,7 @@ def container_loading_graph(datafile_location, supplier, model):
 
     return df_ocean_copy, df_received_copy
 
-def weekly_container_arrival_chart(datafile_location, supplier, model):
+def weekly_container_arrival_chart_OLD(datafile_location, supplier, model):
 
     # unpack data
     df, df_sum = data.weekly_container_arrival_df(datafile_location, supplier, model)
@@ -991,15 +945,17 @@ def weekly_container_arrival_chart(datafile_location, supplier, model):
 
     return fig, fig1
 
-def inventory_level_projection_graph(datafile_location, supplier, model):   #df, supplier, avg_sales_per_week, current_month_sales):
+def inventory_level_projection_graph_OLD(datafile_location, supplier, model):   #df, supplier, avg_sales_per_week, current_month_sales):
     supplier_limits = {
         'ALL': 60000,
         'Aquacubic': 2500,
         'Bomeijia': 600,
-        'Carysil': 150,
-        'Changie': 300,
+        'Carysil': 300,
+        'CAE Sanitary': 400,
+        'Changie': 400,
         'Elleci': 5000,
         'Galassia': 500,
+        'Huayi': 1000,
         'Nicos': 300,
         'Plados': 300,
         'Speed': 30000,
@@ -1009,9 +965,10 @@ def inventory_level_projection_graph(datafile_location, supplier, model):   #df,
         'Wisdom': 70,
         'Xindeli': 2000,
         'Yalos': 100,
-        'Huayi': 1000,
-        'CAE Sanitary': 400
-    }
+        }
+
+    # st.write(sum(supplier_limits.values()) - 60000)     # minimum total stock level
+    # st.stop()
 
     h_line = supplier_limits.get(supplier, 0)
 
@@ -1128,74 +1085,6 @@ def inventory_level_projection_graph(datafile_location, supplier, model):   #df,
     # st.write(df_sum)
 
     return fig
-
-
-def inventory_level_projection_table_OLD(datafile_location, current_month, current_year, forecast_month, supplier, model):
-    values = data.inventory_level_projection_df(datafile_location, current_month, current_year, forecast_month, supplier, model)
-    df = values[0]
-
-    avg_sales_per_week = values[1]
-    wh_inventory = values[2]
-    current_month_sales = values[3]
-
-    df = df[['WEEK', 'PROJECTION']]
-    df = df.rename(columns={'WEEK': 'DATE'})
-    df['DATE'] = df.apply(lambda x: str(x.iloc[0])[7:13], axis=1)
-
-    now = datetime.now()
-    current_date = str(now)[5:7] + '/' + str(now)[8:10]
-
-    df1 = pd.DataFrame({'DATE': [current_date], 'PROJECTION': [wh_inventory]})
-
-    df = pd.concat([df1, df])
-
-    fig2 = inventory_level_projection_graph(df, supplier, avg_sales_per_week, current_month_sales)
-
-    return fig2, df
-
-def lowes_sales(datafile_location):
-    df = data.lowes_sales(datafile_location)
-
-    # Create font color list based on STOCK condition
-    font_colors = []
-    for col in df.columns:
-        if col == 'STOCK':
-            font_colors.append(['red' if val < 10.5 else 'black' for val in df[col]])
-        else:
-            font_colors.append(['black'] * len(df))
-
-    # Create Plotly table
-    fig = go.Figure(data=[go.Table(
-        header=dict(
-            values=list(df.columns),
-            fill_color=[color_hex(97)],
-            line_color='white',
-            font_color='white',
-            font_size=16,
-            height=35,
-            align=['left', 'center'],
-        ),
-
-        cells=dict(
-            values=[df[col] for col in df.columns],
-            font_size=16,
-            height=40,
-            font=dict(color=font_colors),  # <-- apply conditional font colors
-            fill_color=[['white', '#f2f2f2'] * (len(df) // 2 + 1)],
-            align=['left', 'center']
-        )
-    )])
-
-    col1, col2 = st.columns([4.7, 0.1])
-
-    with col1:
-        fig.update_layout(height=370, margin=dict(l=0, r=0, b=0, t=0))
-
-        st.plotly_chart(fig, width='stretch')
-        utils.download_csv(df, 'Download')
-
-    return
-
 
 def test():
     import streamlit as st

@@ -7,8 +7,10 @@ from st_aggrid import GridOptionsBuilder, AgGrid
 import numpy as np
 
 
-from scdat_colors_26 import color_hex
+# from scdat_colors_26 import color_hex
 import scdat_utils_26 as utils
+from scdat_utils_26 import color_hex
+
 import scdat_figures_26 as fg
 import scdat_data_26 as data
 

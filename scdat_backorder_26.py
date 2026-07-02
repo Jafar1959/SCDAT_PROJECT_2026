@@ -4,7 +4,9 @@ import pandas as pd
 
 import scdat_data_26 as data
 import scdat_utils_26 as utils
-from scdat_colors_26 import color_hex
+from scdat_utils_26 import color_hex
+
+# from scdat_colors_26 import color_hex
 def backorder_analysis(datafile_location):
     utils.show_header('Backorders')
     df_backorder = data.backorder_df(datafile_location)     # get backorder data

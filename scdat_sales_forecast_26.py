@@ -3,6 +3,8 @@ import streamlit as st
 import pandas as pd
 import base64
 from statistics import mean
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
+import glob
 
 import datetime
 from datetime import date, timedelta
@@ -31,8 +33,10 @@ import math
 
 # import tensorflow as tf
 # ============== my modules ============================
-from scdat_colors_26 import color_hex
+# from scdat_colors_26 import color_hex
 import scdat_utils_26 as utils
+from scdat_utils_26 import color_hex
+
 import scdat_data_26 as data
 
 
@@ -701,3 +705,106 @@ def display_loading_plan(datafile_location, forecast_month):
         st.plotly_chart(fig, use_container_width=True)
     return
 
+
+def three_years_sales(datafile_location):
+    folder = datafile_location + "\Sales\Monthly_Sales\MONTHLY"
+
+    # Read all CSV files matching your pattern
+    files = glob.glob(folder + "\*_Sales_*.csv")
+    files.sort()
+
+    st.write(files[-24:])
+    st.stop()
+
+    all_data = []
+    df_product = data.product_df(datafile_location)[['SKU','SUPPLIER']]
+    # _______________ Remove Faucet Parts (RVP), Packing Box (RBX) and Display (RDM) __________________
+    prefixes = ('RVP', 'RBX', 'RDM')
+    df_product = utils.exclude_sku_prefixes(df_product, prefixes)
+
+    for file in files:
+        # Extract month-year from filename
+        # Example: 2301_Sales_Jan-23.csv → Jan-23
+        month_str = file.split("_Sales_")[1].replace(".csv", "")
+
+        # Read the file
+        df = pd.read_csv(file)[['SKU', 'TOTAL']]
+        df = pd.merge(df_product, df, on=["SKU"], how='left')
+        df = df.fillna(0)
+        # st.write(df)
+        # st.stop()
+
+        # Add Month column
+        df["Month"] = month_str
+
+        # Append to list
+        all_data.append(df)
+
+    # Combine all months
+    final_df = pd.concat(all_data, ignore_index=True)
+
+    # Convert Month to datetime (important for forecasting)
+    final_df["Month"] = pd.to_datetime(final_df["Month"], format="%b-%y")
+
+    # Sort
+    final_df = final_df.sort_values(["SKU", "Month"])
+
+    # Save final 36‑month file
+    # final_df.to_csv("36_month_sales.csv", index=False)
+
+    return final_df
+
+
+def holtwinter_forecast(datafile_location):
+
+    df = three_years_sales(datafile_location)[['SKU', 'SUPPLIER', 'TOTAL', 'Month']]
+
+    # st.write(df[df.duplicated(subset=["SKU", "Month"], keep=False)])  # <<<<< CHECK DUPLICATE ROWS---- DON'T DELETE
+
+    df["Month"] = pd.to_datetime(df["Month"])
+    df = df.sort_values(["SUPPLIER", "SKU", "Month"])
+
+    # _____________ Remove all data of the current month ________________________
+    current_month = pd.Timestamp.today().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    df = df[df["Month"] < current_month]
+
+    # st.write(df)
+    # st.stop()
+
+    results = []
+
+    for sku, group in df.groupby("SKU"):
+        supplier = group["SUPPLIER"].iloc[0]
+        group = group.set_index("Month").asfreq("MS")
+
+        model = ExponentialSmoothing(
+            group["TOTAL"],
+            trend="add",
+            seasonal="add",
+            seasonal_periods=12
+        ).fit(
+
+        # fit = model.fit(
+            smoothing_level=0.85,  # High emphasis on recent data
+            smoothing_trend=0.3,
+            smoothing_seasonal=0.2,
+            optimized=False
+        )
+
+        # Single forecast value = next month
+        forecast_value = model.forecast(1).iloc[0]
+
+        results.append({"SKU": sku,
+                        "SUPPLIER": supplier,
+                        "Forecast": forecast_value})
+
+
+    single_forecast_df = pd.DataFrame(results)
+    # single_forecast_df.loc[single_forecast_df["Forecast"] < 1, "Forecast"] = 1
+    single_forecast_df["Forecast"] = single_forecast_df["Forecast"].clip(lower=1).round(0)
+    # single_forecast_df = single_forecast_df.reset_index()
+
+    st.write(single_forecast_df)
+    utils.download_csv(single_forecast_df, "Download")
+
+    return

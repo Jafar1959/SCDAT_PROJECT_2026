@@ -23,7 +23,9 @@ import glob
 
 import scdat_data_26 as data
 import scdat_utils_26 as utils
-from scdat_colors_26 import color_hex
+from scdat_utils_26 import color_hex
+
+# from scdat_colors_26 import color_hex
 
 SUPPLIER_LIST = ["ALL",
                  "Speed",
@@ -52,11 +54,11 @@ def select_month():
     current_month_no = date.today().month
     return st.sidebar.selectbox("MONTH", month_names, index=current_month_no - 1)
 
-
 def select_year():
     current_year = date.today().year
     years = [current_year - i for i in range(3)]
     return st.sidebar.selectbox("YEAR", years)
+
 
 def filter_dataframe(df, supplier, model):
     if supplier != 'ALL':
@@ -68,21 +70,19 @@ def filter_dataframe(df, supplier, model):
     return df
 
 def display_one_month_sales(datafile_location):
-    # --- Inputs ---
+    # __________ Create Select Box Inputs _____________________-
     month = select_month()
     year = select_year()
-
-    df = data.one_month_sales_df(datafile_location, month, str(year)).fillna(0)
-
     supplier = st.sidebar.selectbox("SUPPLIER", SUPPLIER_LIST)
     model = st.sidebar.text_input("MODEL / COLOR", "ALL")
 
-    #df_filtered = filter_dataframe(df, supplier, model)
+    # ____________ Read Data File ________________________________
+    df = data.one_month_sales_df(datafile_location, month, str(year)).fillna(0)
+
+    # ____________ Filter as per Supplier or Models _______________
     df_filtered = utils.supplier_model_query(df, supplier, model)
 
-    # st.write(df_filtered)
-
-    # --- Calculations ---
+    # _________ Calculate Totals _________________________________
     total_amazon = df_filtered['AMAZON'].sum()
     total_zen = df_filtered['ODDO'].sum()
     total_sales = df_filtered['TOTAL'].sum()
@@ -147,7 +147,6 @@ def display_one_month_sales(datafile_location):
 
     # --- Download ---
     utils.download_csv(df_filtered, f"Download Sales {month}-{year}")
-
 
 def sales_anatomy_dashboard(datafile_location):
     # utils.show_header('Sales Anatomy')
@@ -679,7 +678,6 @@ def median_table(df_sales_and_price):
     utils.download_csv(df, 'Download Data')
     return
 
-
 def current_month_sales_graph(datafile_location, forecast_month, suppliers):
 
     s = forecast_month
@@ -689,10 +687,6 @@ def current_month_sales_graph(datafile_location, forecast_month, suppliers):
 
     df1 = data.one_month_sales_df(datafile_location, current_month, year)
     df1 = df1[['SKU', 'TOTAL']]
-
-    # st.write(df1)
-    # utils.download_csv(df1, 'Download Inventory')
-    # st.stop()
 
     suppliers.remove("ALL")
 
@@ -718,47 +712,42 @@ def current_month_sales_graph(datafile_location, forecast_month, suppliers):
 
     df = pd.merge(df, df_fba, on=["SKU"], how='left')
 
-    # st.write(df)
-    # st.write(df_fba)
-    # st.stop()
-    # ____________________________________________
+    # ______________ Remove Lines If SKU has BOTH NaN + empty strings ______________________
+    df = df[df['SKU'].notna() & (df['SKU'].str.strip() != '')]
+
+    # ___________Create a copy _________________________________
     df_all = df.copy()
 
+
+    # ___________ Get All Accessories Data Only _________________________________________
     df_acc = df.loc[lambda row: row['SKU'].str.startswith('RVA')]   # all accessories
     forecast_acc = df_acc['FORECAST'].sum()
     total_acc = df_acc['TOTAL'].sum()
     total_acc_fba = df_acc['FBA QTY'].sum()
 
+
+    # _____________ Remove All Accessories Data ________________________________________
     df = df.loc[lambda row: ~ row['SKU'].str.startswith('RVA')]     # remove all accessories
 
-    # st.write(df)
-
+    # ______________ Group by Suppliers __________________________________________
     df = df.groupby(['SUPPLIER'])[['FORECAST', 'TOTAL', 'FBA QTY']].sum().reset_index()  # <<<<<<<<<< change in syntex
-    # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
-    # st.write(df)
-
+    # ______________ Add Accessories Data at the Bottom _________________________
     df.loc[len(df)] = ["ACCESSORIES", forecast_acc, total_acc, total_acc_fba]      # add all accessories
 
-    # df['PERCENT'] = round(df['TOTAL'] * 100 / df['FORECAST'], 2)
-    df['PERCENT'] = round((df['TOTAL']-df['FBA QTY']) * 100 / df['FORECAST'], 2)
+
+    # _____________ Get FBA Sales % ___________________________________________
     df['FBA_PERCENT'] = round(df['FBA QTY'] * 100 / df['FORECAST'], 2)
 
-    # df['PERCENT_LEFT'] = round(100 - df['PERCENT'], 2)
+    # _____________ Get Remaining Sales % ____________________________________
+    df['PERCENT'] = round((df['TOTAL']-df['FBA QTY']) * 100 / df['FORECAST'], 2)
+
+    # ____________ Calculate % Left _______________________________________
     df['PERCENT_LEFT'] = round(100 - df['PERCENT'] - df['FBA_PERCENT'], 2)
 
-    # st.write(df)
-
-    # def adjust_percent(percent_left):
-    #     if percent_left < 0:
-    #         percent_left = 0
-    #     return percent_left
-    #
-    # df['PERCENT_LEFT'] = df.apply(lambda x: adjust_percent(x.iloc[4]), axis=1)
-
+    # _____________ If % is less than Zero then make it Zero _________________________
     df['PERCENT_LEFT'] = df['PERCENT_LEFT'].clip(lower=0)
 
-    # df = df[['SUPPLIER', 'FORECAST', 'PERCENT', 'PERCENT_LEFT']]
     df = df.rename(columns={'TOTAL': 'TOTAL SALES'})
 
     # st.write(df)
@@ -772,7 +761,7 @@ def current_month_sales_graph(datafile_location, forecast_month, suppliers):
         name='FBA Sales (' + total_fba_percent + '%)',
         # text=df['FBA QTY'],
         marker=dict(
-            color=color_hex(275),  # 'rgba(160, 178, 139, 0.4)',
+            color=color_hex(275),
             line=dict(color='rgba(0, 139, 139, 1.0)', width=1),
         )
     ))
@@ -839,28 +828,30 @@ def current_month_sales_graph(datafile_location, forecast_month, suppliers):
     target = now.day * 100 / total_days
     target = math.floor(target)
 
-    # ________________ calculate total sales ____________________________
+    # ________________ calculate total sales from one month sale (df1) ____________________________
     total_faucet = df1[df1["SKU"].str.startswith("RVF")]['TOTAL'].sum()
     total_bathtub = df1[df1["SKU"].str.startswith("RVB6")]['TOTAL'].sum()
     total_accessories = df1[df1["SKU"].str.startswith("RVA")]['TOTAL'].sum()
     total_sink = df1['TOTAL'].sum() - (total_faucet + total_bathtub + total_accessories)
 
-    sink_projected = total_sink * total_days/(now.day - 1)
-    bathtub_projected = total_bathtub * total_days/(now.day - 1)
-    faucet_projected = total_faucet * total_days/(now.day - 1)
-    accessories_projected = total_accessories * total_days/(now.day - 1)
+    # _______________ Calculate Projected Sales _________________________________________
+    if now.day == 1:
+        projection_factor = 1
 
-    # projected_sales = 0
-    #
-    # if now.day >= 2:
-    #     projected_sales = round(df['TOTAL SALES'].sum() * total_days/(now.day-1), 0)
+    else:
+        projection_factor = total_days / (now.day - 1)
 
+    sink_projected = total_sink * projection_factor
+    bathtub_projected = total_bathtub * projection_factor
+    faucet_projected = total_faucet * projection_factor
+    accessories_projected = total_accessories * projection_factor
+
+    # ______________ Create Annotation Text _____________________________________
     annotation_text = utils.get_todays_date() + " >> "\
                       + ' Sink: ' + str(utils.format_num(total_sink)) \
                       + ' | Bathtub: ' + str(utils.format_num(total_bathtub)) \
                       + ' | Faucet: ' + str(utils.format_num(total_faucet)) \
                       + ' | Accessories: ' + str(utils.format_num(total_accessories)) + ' '\
-                      # + ' || Sales Target: ' + str(target) + '%'
 
 
     if 5 <= target <= 100:      # ______ horizontal line is visible if the condition met _______
@@ -873,7 +864,7 @@ def current_month_sales_graph(datafile_location, forecast_month, suppliers):
                       )
                       )
 
-
+    # ______________________ Display Bar Graph ____________________________________
     col1, col2 = st.columns([1, 0.1])
     with col1:
 
@@ -884,7 +875,7 @@ def current_month_sales_graph(datafile_location, forecast_month, suppliers):
                           + ' , Accessories: ' + str(utils.format_num(accessories_projected))
                           # + ' | ' + utils.get_todays_date()
                           )
-        fig.update_layout(height=600, margin=dict(l=0, r=0, b=0, t=0))
+        fig.update_layout(height=700, margin=dict(l=0, r=0, b=0, t=0))
 
         st.plotly_chart(fig, width='stretch')
 
@@ -901,7 +892,6 @@ def current_month_sales_graph(datafile_location, forecast_month, suppliers):
         utils.download_csv(df2, 'Download Forecast')
       
     return
-
 
 def display_quarterly_report(datafile_location, df, df_revenue_data):
 
@@ -1012,131 +1002,7 @@ def display_quarterly_report(datafile_location, df, df_revenue_data):
     return
 
 
-def display_supplier_wise_quarterly_report(datafile_location, df, df_revenue_data):
-
-    df['Revenue (Million USD)'] = round(df['Revenue']/1000000, 2)   # convert to Million USD
-
-    df['Year'] = df.apply(lambda x: str(x.iloc[0])[0:4], axis=1)
-    df['Q'] = df.apply(lambda x: str(x.iloc[0])[5:7], axis=1)
-
-    year_list = df['Year'].to_list()
-    year_list = list(set(year_list))
-    year_list.sort(reverse=True)
-
-    text = 'Quarterly Sales Summary | ' + ut.get_todays_date()
-    st.markdown(
-        f'<p style="font-family: Book Antiqua; color: {color_hex(234)}; text-align:left; font-size: 22px ;border-radius:2%; line-height:0em; '
-        f'margin-top:10px"> {text} </p>', unsafe_allow_html=True)
-
-    st.write('')
-
-    mygrid = ut.make_grid(5, 5)  # (rows, cols)
-    col = 0
-    row = 0
-
-    SUPPLIER_LIST.append('Revenue (Million USD)')
-
-    # st.write(SUPPLIER_LIST)
-    # st.stop()
-
-    for i in range(0, len(SUPPLIER_LIST)):
-
-        if i == 0:
-            supplier = 'Sink'   # Total sinks for ALL
-        else:
-            supplier = SUPPLIER_LIST[i]
-
-        # st.write(supplier)
-        # st.write(df)
-        # st.stop()
-
-        df1 = df[['Year', 'Q', supplier]]
-
-        df_supplier = pd.DataFrame({'Q':['Q1', 'Q2','Q3', 'Q4']})
-
-        for j in range(0, len(year_list)):
-            year = year_list[j]
-
-            df2 = df1[df1['Year'] == year]
-            df2 = df2[['Q', supplier]]
-            df2 = df2.rename(columns={supplier: year})
-
-            df_supplier = pd.merge(df_supplier, df2, on=["Q"], how='outer')
-
-        df_supplier = df_supplier.fillna(0)
-
-        df_supplier = df_supplier.set_index('Q').transpose().reset_index()
-        df_supplier = df_supplier.rename(columns={'index': 'YEAR'})
-        df_supplier['TOTAL'] = df_supplier.sum(numeric_only=True, axis=1)
-        df_supplier['TOTAL'] = round(df_supplier['TOTAL'],2)
-
-        cols = df_supplier.columns
-
-        for c in range(1, len(cols)):
-            column_no = df_supplier[cols[c]]
-            column_no.replace(to_replace=0, value='', inplace=True)
-
-        fig = go.Figure(data=[go.Table(
-            columnwidth=[16, 18],
-
-            header=dict(values=list(cols),
-                        fill_color=[color_hex(234)] + [color_hex(66)]*4 + [color_hex(118)],
-                        line_color='white',
-                        font_color='white',
-                        font_size=14,
-                        height=28,
-                        align=['left', 'center']),
-            cells=dict(
-                values=[df_supplier[cols[0]], df_supplier[cols[1]], df_supplier[cols[2]], df_supplier[cols[3]], df_supplier[cols[4]], df_supplier[cols[5]] ],
-                font_size=14,
-                height=28,
-                fill_color=['lightpink'] + [color_hex(12)]*4 + ['lightblue'],
-                line_color='white',
-                align=['left', 'right']))
-        ])
-
-        if supplier == 'Sink':
-            text = 'All Supplier'
-            text_color = color_hex(326)
-
-        elif supplier == 'Revenue (Million USD)':
-            text = 'Quarterly Revenue (Million USD)'
-            text_color = color_hex(27)
-
-        else:
-            text = supplier
-            text_color = color_hex(118)
-
-        mygrid[row][col].markdown(
-            f'<p style="font-family: Book Antiqua; color: {text_color}; text-align:left; font-size: 18px ;border-radius:2%; '
-            f'line-height:0em; margin-top:0px"> {text} </p>', unsafe_allow_html=True)
-
-        fig.update_layout(width=700, height=len(df_supplier) * 28 + 28, margin=dict(l=0, r=0, b=0, t=0))
-
-        mygrid[row][col].plotly_chart(fig, use_container_width=True)
-
-        if col < 3:
-            col += 1
-
-        else:
-            col = 0
-            row += 1
-
-    # show material wise revenue ============================================
-    txt = 'Material wise Revenue (Million USD)'
-    mygrid[row][col].markdown(
-        f'<p style="font-family: Book Antiqua; color: {color_hex(25)}; text-align:left; font-size: 18px ;border-radius:2%; '
-        f'line-height:0em; margin-top:0px"> {txt} </p>', unsafe_allow_html=True)
-
-    fig1 = display_material_wise_revenue(datafile_location)
-    mygrid[row][col].plotly_chart(fig1, use_container_width=True)
-
-    ut.download_csv(df_revenue_data, 'Download Revenue Data')
-
-    return
-
-
-def display_sales_report(datafile_location, supplier_list):
+def display_sales_report_OLD(datafile_location, supplier_list):
 
     values = data.quarterly_revenue_df(datafile_location)
     df_revenue = values[0]
@@ -1255,7 +1121,7 @@ def display_sales_report(datafile_location, supplier_list):
     last_month = df_all_month['Month'].tail(total_rows - 12).values[0]
 
     with col1:
-        text = '13-Month Sales Report | ' + first_month + ' to ' + last_month + ' | ' + ut.get_todays_date()    # + ' | Total Months: 12' # + str(
+        text = '13-Month Sales Report | ' + first_month + ' to ' + last_month + ' | ' + utils.get_todays_date()    # + ' | Total Months: 12' # + str(
         # len(' \                                                                                         'source_files))
         st.markdown(
             f'<p style="font-family: Book Antiqua; color: {color_hex(118)}; text-align:left; font-size: 18px ;border-radius:2%; line-height:0em; '
@@ -1274,6 +1140,410 @@ def display_sales_report(datafile_location, supplier_list):
     display_quarterly_report(datafile_location, df_all_month, df_revenue_data)
 
     return df_revenue_data
+
+def display_sales_report_monthly(datafile_location):
+    # ______________ Get file list in the directory 'Sales\\Monthly_Sales\\MONTHLY' _________________
+    path = datafile_location + 'Sales\\Monthly_Sales\\MONTHLY' + '\\'
+    source_files = os.listdir(Path(PureWindowsPath(path)))
+    source_files.sort(reverse=True)
+
+    # ____________ Get current price ________________________________
+    # current_price = data.price_list_df(datafile_location)
+
+    # _______________ Read all sales file and append _____________________
+    df = pd.DataFrame({})
+    df_sku = pd.DataFrame({})
+
+    for i in range(0, len(source_files)):
+
+        file_path = path + str(source_files[i])
+
+        # ___________ get month name from file name _______________________
+        file_name = str(source_files[i])  # get file name
+        month_name = file_name.rsplit('_', 1)[-1].removesuffix('.csv')
+
+        # st.write(month_name)
+
+        df_temp = pd.read_csv(
+            Path(PureWindowsPath(file_path)),
+            usecols=['SKU', 'SUPPLIER', 'TOTAL']
+        )
+
+        # _______________ Remove Accessories (RVA), Faucet Parts (RVP), Packing Box (RBX) and Display (RDM) __________________
+        prefixes = ('RVA', 'RVP', 'RBX', 'RDM')
+        df_sink = utils.exclude_sku_prefixes(df_temp, prefixes)
+
+        # ______________ Transpose data - Suppliers in column __________________
+        df_sink = (
+            df_sink.groupby('SUPPLIER', as_index=True)['TOTAL']
+            .sum()
+            .to_frame()
+            .T
+        )
+
+        # ______________ Add total Sink Column __________________________
+        df_sink['Total'] = df_sink.sum(axis=1)
+
+        # _____________ Add accessories data in column _________________________
+        df_accessories = df_temp.loc[lambda row: row['SKU'].str.startswith('RVA')]
+        df_sink['Accessories'] = df_accessories['TOTAL'].sum()
+
+        # ______________ Insert month name in the first column _______________
+        df_sink.insert(0, 'MONTH', month_name)
+        df_temp.insert(0, 'MONTH', month_name)
+
+        # ___________ Reset index ________________________________
+        df_sink = df_sink.reset_index(drop=True)
+
+        if i == 0:
+            df = df_sink
+            df_sku = df_temp
+        else:
+            df = pd.concat([df, df_sink], ignore_index=True)
+            df_sku = pd.concat([df_sku, df_temp], ignore_index=True)
+
+    df = df.fillna(0)
+    df_sku = df_sku.fillna(0)
+
+    # _____________ Add alternating 'color1' and 'color2' values in a new column _________________
+    if len(df) > 1:
+        df['color'] = ['rgb(240, 248, 255)' if i % 2 == 0 else 'rgb(189, 215, 231)' for i in range(len(df))]
+    else:
+        df['color'] = ['rgb(189, 215, 231)']
+
+    # ___________________ Create plotly table __________________________
+
+    cols = df.columns
+    fig = go.Figure(data=[go.Table(
+
+        columnwidth=[12,    # Month
+                     16,    # Aquacubic
+                     14,    # Bomeijia
+                     19,    # CAE Sanitary
+                     13,    # Carysil
+                     14,    # Changie
+                     12,    # Elleci
+                     14,    # Galassia
+                     11,    # Huayi
+                     12,    # Nicos
+                     13,    # Plados
+                     13,    # Speed
+                     21,    # Speed Vietnam
+                     17,    # Stile Libero
+                     18,    # UAE Fireclay
+                     12,    # Wisdom
+                     12,    # Xindeli
+                     11,    # Yalos
+                     12,    # Sink
+                     16],   # Accessories
+
+        header=dict(values=list(cols)[:-1],
+                    fill_color=[color_hex(118)] + [color_hex(66)] * 17 + [color_hex(234), 'grey'],
+                    line_color='white',
+                    font_color='white',
+                    font_size=13,
+                    height=30,
+
+                    align=['left', 'center']),
+        cells=dict(
+            values=[df[c] for c in cols[:20]], # from cols[0] --> cols[19]
+            font_size=14,
+            height=30,
+            fill_color=[df.color],
+            line_color='white',
+            align=['left', 'right']))
+        ])
+
+    # ______________ Display ____________________________
+    col1, col2 = st.columns([14, 1])
+
+    with col1:
+        total_rows = len(df)
+        first_month = df['MONTH'].tail(total_rows).values[0]
+        last_month = df['MONTH'].tail(total_rows - 12).values[0]
+
+        txt = '13-Month Sales Report | ' + first_month + ' to ' + last_month + ' | ' + utils.get_todays_date()    # + ' | Total Months: 12' # + str(
+        utils.show_header(txt)
+
+        fig.update_layout(height=14*30-3, margin=dict(l=0, r=0, b=0, t=0))
+
+        st.plotly_chart(fig, width='stretch')
+
+        utils.download_csv(df, 'Download Monthly Sales Report')
+
+        df_quarter = display_sales_report_quarterly(df)
+        display_quarterly_sales_report_supplier_wise(df_quarter, df_sku)
+
+
+    return df
+
+def display_sales_report_quarterly(df):
+    header_txt = "Quarterly Report"
+    st.markdown(
+        f'<p style="font-family: Book Antiqua; color: {color_hex(164)}; text-align:left; font-size: 18px ;border-radius:2%; line-height:0em;'
+        f' margin-top:5px">{header_txt}</p>', unsafe_allow_html=True)
+
+    df['MONTH'] = pd.to_datetime(df['MONTH'], format='%b-%y')
+
+    df_quarter = (
+        df.groupby(df['MONTH'].dt.to_period('Q'))
+        .sum(numeric_only=True)
+        .sort_index(ascending=False)
+    )
+
+    df_quarter.index = (
+            'Q' + df_quarter.index.quarter.astype(str)
+            + '-' +
+            df_quarter.index.year.astype(str)
+    )
+
+    quarter_colors = {
+        'Q1': '#FFDEAD',  # 263
+        'Q2': '#ADD8E6',  # 184
+        'Q3': '#FFE4E1',  # 258
+        'Q4': '#D3D3D3',  # 201
+    }
+
+    df_quarter['COLOR'] = (
+        df_quarter.index.to_series()
+        .str.extract(r'(Q\d)')[0]
+        .map(quarter_colors)
+    )
+
+    df_quarter = df_quarter.reset_index()
+
+    # ___________________ Create plotly table __________________________
+
+    cols = df_quarter.columns
+    fig = go.Figure(data=[go.Table(
+
+        columnwidth=[14,  # Month
+                     16,  # Aquacubic
+                     14,  # Bomeijia
+                     19,  # CAE Sanitary
+                     13,  # Carysil
+                     14,  # Changie
+                     12,  # Elleci
+                     14,  # Galassia
+                     11,  # Huayi
+                     12,  # Nicos
+                     13,  # Plados
+                     13,  # Speed
+                     21,  # Speed Vietnam
+                     17,  # Stile Libero
+                     18,  # UAE Fireclay
+                     12,  # Wisdom
+                     12,  # Xindeli
+                     11,  # Yalos
+                     12,  # Sink
+                     16],  # Accessories
+
+        header=dict(values=list(cols)[:-1],
+                    fill_color=[color_hex(118)] + [color_hex(66)] * 17 + [color_hex(234), 'grey'],
+                    line_color='white',
+                    font_color='white',
+                    font_size=13,
+                    height=30,
+
+                    align=['left', 'center']),
+        cells=dict(
+            values=[df_quarter[c] for c in cols[:20]],   # from cols[0] --> cols[19]
+            font_size=14,
+            height=30,
+            fill_color=[df_quarter.COLOR],
+            line_color='white',
+            align=['left', 'right']))
+    ])
+
+    fig.update_layout(height=15 * 30 - 3, margin=dict(l=0, r=0, b=0, t=0))
+
+    st.plotly_chart(fig, width='stretch')
+
+    utils.download_csv(df_quarter, 'Download Quarterly Sales Report')
+
+    # display_quarterly_sales_report_supplier_wise(df_quarter)
+
+    return df_quarter
+
+def display_quarterly_sales_report_supplier_wise(df, df_sku):
+    df = df.rename(columns={'Total': 'All Suppliers'})
+
+    # ___________ Get suppliers name from column name ______________________
+    suppliers = df.columns.tolist()
+    suppliers.remove('MONTH')
+    suppliers.remove('COLOR')
+
+    # _______________ Move 'All Suppliers' to the first of the list _____________________
+    idx = suppliers.index("All Suppliers")
+    suppliers.insert(0, suppliers.pop(idx))
+
+    # _____________ Show heading _____________________________________________________
+    text = 'Quarterly Sales Summary | ' + utils.get_todays_date()
+    st.markdown(
+        f'<p style="font-family: Book Antiqua; color: {color_hex(234)}; text-align:left; font-size: 20px ;border-radius:2%; line-height:0em; '
+        f'margin-top:10px"> {text} </p>', unsafe_allow_html=True)
+
+    st.write("")
+
+    # ___________________ Create Grid for display _______________________
+    mygrid = utils.make_grid(7, 5)
+    col = row = 0
+
+    for i in range (0, len(suppliers)):
+        supplier = suppliers[i]
+
+        df_out = (
+            df[['MONTH', supplier]]
+            .assign(
+                YEAR=lambda x: x['MONTH'].str[-4:],
+                QUARTER=lambda x: x['MONTH'].str[:2]
+            )
+            .pivot(
+                index='YEAR',
+                columns='QUARTER',
+                values=supplier
+            )
+            .reset_index()
+        )
+
+
+        # _______________ Calculate Total and replace zero by "" __________________
+        df_out = df_out.fillna(0)
+        df_out['Total'] = df_out['Q1'] + df_out['Q2'] + df_out['Q3'] + df_out['Q4']
+        df_out = df_out.replace(0, "")
+
+        # ____________ Sort descending by year __________________________
+        df_out = df_out.sort_values('YEAR', ascending=False)
+
+        cols = df_out.columns
+
+        fig = go.Figure(data=[go.Table(
+                columnwidth=[16, 18],
+
+                header=dict(values=list(cols),
+                        fill_color=[color_hex(234)] + [color_hex(66)] * 4 + [color_hex(118)],
+                        line_color='white',
+                        font_color='white',
+                        font_size=14,
+                        height=28,
+                        align=['left', 'center']),
+
+                cells=dict(
+                    values=[df_out[c] for c in cols[:6]],   # from cols[0] --> cols[5]
+                    font_size=13,
+                    height=28,
+                    fill_color=['lightpink'] + [color_hex(12)] * 4 + ['lightblue'],
+                    line_color='white',
+                    align=['center', 'right']))
+                    ])
+
+        mygrid[row][col].markdown(
+            f'<p style="font-family: Book Antiqua; color: {color_hex(25)}; text-align:left; font-size: 18px ;border-radius:2%; '
+            f'line-height:0em; margin-top:0px"> {supplier} </p>', unsafe_allow_html=True)
+
+        fig.update_layout(width=700, height=len(df_out) * 28 + 28, margin=dict(l=0, r=0, b=0, t=0))
+
+        mygrid[row][col].plotly_chart(fig, use_container_width=True)
+
+        # ____________ Grid positioning _______________
+        col += 1
+        if col == 5:
+            col = 0
+            row += 1
+
+    # ___________________ Display Product-Level Summary _____________________
+    txt = "Product-Level Summary"
+    mygrid[row][col].markdown(
+        f'<p style="font-family: Book Antiqua; color: {color_hex(25)}; text-align:left; font-size: 18px ;border-radius:2%; '
+        f'line-height:0em; margin-top:0px"> {txt} </p>', unsafe_allow_html=True)
+    fig1 = display_sales_report_product_level_summary(df_sku)
+
+    mygrid[row][col].plotly_chart(fig1, width='stretch')
+
+    return
+
+
+def display_sales_report_product_level_summary(df):
+    # st.write(df)
+
+    # _______________ Remove accessories ____________________________
+    prefixes = ('RVA', 'RVP', 'RBX', 'RDM')
+    df = utils.exclude_sku_prefixes(df, prefixes)
+
+    df['MATERIAL'] = df['SKU'].str[:3]
+    df['MATERIAL'] = (df['MATERIAL']
+        .str.replace('RVH', 'HM', regex=False)
+        .str.replace('RVU', 'HM', regex=False)
+        .str.replace('RVQ', 'HM', regex=False)
+        .str.replace('RVM', 'MM', regex=False)
+        .str.replace('RVG', 'GR', regex=False)
+        .str.replace('RVL', 'FC', regex=False)
+                      )
+
+
+    df = df.groupby(['MONTH', 'MATERIAL'])['TOTAL'].sum().to_frame().reset_index()
+    # st.write(df)
+    # st.stop()
+
+
+    # Convert MONTH to datetime
+    df['MONTH'] = pd.to_datetime(df['MONTH'], format='%b-%y')
+
+    # Extract year
+    df['YEAR'] = df['MONTH'].dt.year
+
+    # Create summary table
+    df_summary = (
+        df.pivot_table(
+            index='YEAR',
+            columns='MATERIAL',
+            values='TOTAL',
+            aggfunc='sum',
+            fill_value=0
+        )
+    )
+
+    # Add total column
+    df_summary['TOTAL'] = df_summary.sum(axis=1)
+
+    # Optional: order columns
+    sku_cols = sorted(df['MATERIAL'].unique())
+    df_summary = df_summary.reindex(columns=sku_cols + ['TOTAL'])
+
+    # Convert YEAR from index to column
+    df_summary = df_summary.reset_index()
+
+    # Remove column header name
+    df_summary.columns.name = None
+    df_summary = df_summary.sort_values('YEAR', ascending=False)
+
+    cols = df_summary.columns
+
+    fig = go.Figure(data=[go.Table(
+        columnwidth=[16, 14, 16, 18, 16, 14, 14, 16],
+
+        header=dict(values=list(cols),
+                    fill_color=[color_hex(234)] + [color_hex(66)] * 6 + [color_hex(118)],
+                    line_color='white',
+                    font_color='white',
+                    font_size=11,
+                    height=28,
+                    align=['left', 'center']),
+
+        cells=dict(
+            values=[df_summary[c] for c in cols[:9]],  # from cols[0] --> cols[5]
+            font_size=11,
+            height=28,
+            fill_color=['lightpink'] + [color_hex(12)] * 6 + ['lightblue'],
+            line_color='white',
+            align=['center', 'center']))
+    ])
+
+    fig.update_layout(height=len(df_summary) * 28 + 28, margin=dict(l=0, r=0, b=0, t=0))
+
+    utils.download_csv(df_summary, 'Download Product-Level Summary')
+
+    return fig
 
 
 def display_annual_flagship(datafile_location):
@@ -1620,7 +1890,6 @@ def display_annual_flagship(datafile_location):
         AgGrid(df_show, fit_columns_on_grid_load=True)
         ut.download_csv(df_show, 'Download')
     return
-
 
 def avg_sales_trend_graph(datafile_location, supplier):   #, supplier='ALL', model='ALL'):
 
@@ -2795,7 +3064,6 @@ def display_dealer_wise_sku_sales(datafile_location):
             row += 1
 
     return
-
 
 def display_material_wise_revenue(datafile_location):
     years = [2026, 2025, 2024]  # <<< ==== Years to be displayed ========

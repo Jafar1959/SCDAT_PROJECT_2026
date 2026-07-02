@@ -1,20 +1,124 @@
 import streamlit as st
-from st_aggrid import GridOptionsBuilder, AgGrid, GridUpdateMode    #, DataReturnMode
+import pandas as pd
+from st_aggrid import GridOptionsBuilder
 
-import calendar
 import datetime
 from datetime import datetime, date
 import base64
 
-def get_todays_date():
-    day = date.today().strftime("%A")
-    month = date.today().strftime("%B")
-    date1 = date.today().strftime("%d")
-    year = date.today().strftime("%Y")
-    date_str = day[0:3] + ', ' + month + ' ' + date1 + ', ' + year
-    return date_str
+from functools import lru_cache
+from pathlib import Path
+import re
+from calendar import month_abbr
+from calendar import month_name
+from calendar import monthrange
 
-def get_month_and_year(forecast_month):
+@lru_cache(maxsize=1)
+def _load_color_map():
+    file_path = Path(__file__).resolve().parent /"scdat_color_chart.xlsx"
+
+    return (
+        pd.read_excel(
+            file_path,
+            sheet_name="Color",
+            usecols=["Color", "Color HEX"]
+        )
+        .set_index("Color")["Color HEX"]
+        .to_dict()
+    )
+
+
+def color_hex(color_no):
+    return _load_color_map().get(color_no)
+
+
+def get_todays_date():
+    return datetime.today().strftime("%a, %B %d, %Y")
+
+
+def get_month_elapsed():
+    now = datetime.now()
+    return (now.month - 1) + (now.day / monthrange(now.year, now.month)[1])
+
+
+def get_month_no(month):
+    return datetime.strptime(
+        month.strip(),
+        "%B" if len(month.strip()) > 3 else "%b"
+    ).month
+
+
+def format_sku(sku):
+    return re.split(r"[-_]", str(sku), maxsplit=1)[0]
+
+
+def format_num(x):
+    num = str(int(float(x)))
+    return f"{int(num):,}" if len(num) >= 4 else num
+
+
+def download_csv(df, text, filename="Jafar_Data.csv"):
+    csv_data = df.to_csv(index=False).encode()
+    b64 = base64.b64encode(csv_data).decode()
+
+    st.markdown(
+        f'<a href="data:file/csv;base64,{b64}" download="{filename}">'
+        f'{text} (.csv)</a>',
+        unsafe_allow_html=True
+    )
+
+
+def make_grid(cols, rows):
+    return [st.columns(rows) for _ in range(cols)]
+
+def exclude_sku_prefixes(df, prefixes):
+    df = df[~df["SKU"].str.startswith(prefixes, na=False)]
+    return df
+
+
+def show_header(txt, top_margin = "-45px"):
+
+    st.markdown(f"""
+                    <div style="font-size:24px; color: #DAA520; font-family: Book Antiqua; font-weight:bold; margin-bottom:0px; margin-top:{top_margin};">
+                        {txt}
+                    </div>
+                    <hr style="border: 1px groove #EEB422;  width: 97.5%; margin-top:0px; margin-bottom:5px;">
+                    """, unsafe_allow_html=True)
+    return
+
+
+def supplier_model_query(df, supplier, model):
+    # st.write(supplier)
+    # st.write(df)
+    model = model.upper()
+
+    if model != 'ALL':
+        # search model or color
+        df = df.loc[
+            lambda row: row['SKU'].str.startswith(model.upper()) |
+                        row['SKU'].str.endswith(model.upper())
+        ]
+
+
+    if supplier != 'ALL':
+        df = df[df['SUPPLIER'] == supplier]
+    return df
+
+
+def get_short_month_name(month):
+    return month_abbr[month]
+
+
+def get_long_month_name(month):
+    return month_name[month]
+
+
+def month_circular_array(start_month, total_month):
+    start = start_month - 1
+    return [(start + i) % 12 + 1 for i in range(total_month)]
+
+# _______________ Function not Optimized (OLD) __________________________________
+def get_month_and_year_OLD(forecast_month):
     month = ''
     year = ''
 
@@ -23,12 +127,12 @@ def get_month_and_year(forecast_month):
 
     return month, year
 
-def get_month_elapsed():
+def get_month_elapsed_OLD():
     now = datetime.now()
 
     # Days in current month
     today = datetime.today()
-    days_in_month = calendar.monthrange(today.year, today.month)[1]
+    days_in_month = monthrange(today.year, today.month)[1]
 
     # Fractional month progress
     fraction = now.day / days_in_month
@@ -38,7 +142,7 @@ def get_month_elapsed():
 
     return months_elapsed
 
-def get_month_no(month):
+def get_month_no_OLD(month):
     month_name = month
 
     if len(month_name) > 3:
@@ -50,13 +154,13 @@ def get_month_no(month):
 
     return month_no
 
-def get_forecast_month(month, year):
+def get_forecast_month_OLD(month, year):
     month_no = get_month_no(month)
     month_no = ('0' + str(month_no))[-2:]
     forecast_month = month_no + '_' + month[0:3] + '-' + year
     return forecast_month
 
-def format_sku(sku):
+def format_sku_OLD(sku):
     sku = str(sku)
 
     # find dash '-'
@@ -71,7 +175,7 @@ def format_sku(sku):
 
     return sku
 
-def format_num(x):
+def format_num_OLD(x):
     n = str(x).split('.')
     num = n[0]
     if len(num) < 4:
@@ -80,27 +184,6 @@ def format_num(x):
         num = num[0: len(num)-3] + ',' + num[-3:]
 
     return num
-
-def month_circular_array(start_month, total_month):
-    assert start_month > 0
-    assert start_month < 13
-
-    months = [0] * total_month
-    start_month -= 1
-
-    for i in range(total_month):
-        months[i] = (start_month % 12) + 1
-        start_month += 1
-
-    return months
-
-def get_short_month_name(month):
-    month = date(1900, month, 1).strftime('%b')
-    return month
-
-def get_long_month_name(month):
-    month = datetime.date(1900, month, 1).strftime('%B')
-    return month
 
 def get_month_order_OLD(month, year):
     month_order = []
@@ -116,7 +199,7 @@ def get_month_order_OLD(month, year):
 
     return month_order
 
-def download_csv(df, text):
+def download_csv_OLD(df, text):
     text = text + ' (.csv)'
     coded_data = base64.b64encode(df.to_csv(index=False).encode()).decode()
     st.markdown(
@@ -124,7 +207,6 @@ def download_csv(df, text):
         unsafe_allow_html=True
     )
     return
-
 
 def build_AgGrid_options_OLD(df, row_height=30, header_height=25):
     gb = GridOptionsBuilder.from_dataframe(df)
@@ -140,14 +222,6 @@ def build_AgGrid_options_OLD(df, row_height=30, header_height=25):
 
     return gridOptions, height
 
-def make_grid(cols, rows):
-    # function to make any grid
-    grid = [0]*cols
-    for i in range(cols):
-        with st.container():
-            grid[i] = st.columns(rows)
-    return grid
-
 def format_sku_2_OLD(sku):
     #st.write(sku)
     sku = str(sku)
@@ -159,34 +233,33 @@ def format_sku_2_OLD(sku):
         sku = sku[0:location]
     return sku
 
-def supplier_model_query(df, supplier, model):
-    # df['SUPPLIER'].str.upper()
-    # supplier = supplier.upper()
-    model = model.upper()
+def get_short_month_name_OLD(month):
+    month = date(1900, month, 1).strftime('%b')
+    return month
 
-    if model != 'ALL':
-        # search model or color
-        df = df.loc[
-            lambda row: row['SKU'].str.startswith(model.upper()) |
-                        row['SKU'].str.endswith(model.upper())
-        ]
+def get_long_month_name_OLD(month):
+    month = datetime.date(1900, month, 1).strftime('%B')
+    return month
 
-    # st.write(df)
-    if supplier != 'ALL':
-        df = df[df['SUPPLIER'] == supplier]
+def make_grid_OLD(cols, rows):
+    # function to make any grid
+    grid = [0]*cols
+    for i in range(cols):
+        with st.container():
+            grid[i] = st.columns(rows)
+    return grid
 
-    return df
+def month_circular_array_OLD(start_month, total_month):
+    assert start_month > 0
+    assert start_month < 13
 
-def show_header(txt, top_margin = "-45px"):
+    months = [0] * total_month
+    start_month -= 1
 
-    st.markdown(f"""
-                    <div style="font-size:24px; color: #DAA520; font-family: Book Antiqua; font-weight:bold; margin-bottom:0px; margin-top:{top_margin};">
-                        {txt}
-                    </div>
-                    <hr style="border: 1px groove #EEB422;  width: 97.5%; margin-top:0px; margin-bottom:5px;">
-                    """, unsafe_allow_html=True)
-    return
+    for i in range(total_month):
+        months[i] = (start_month % 12) + 1
+        start_month += 1
 
-def exclude_sku_prefixes(df, prefixes):
-    df = df[~df["SKU"].str.startswith(prefixes, na=False)]
-    return df
+    return months
+
+

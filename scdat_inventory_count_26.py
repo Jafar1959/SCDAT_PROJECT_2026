@@ -8,11 +8,13 @@ from datetime import datetime, timedelta
 import calendar
 import numpy as np
 import scdat_utils_26 as utils
-from scdat_colors_26 import color_hex
+from scdat_utils_26 import color_hex
+
+# from scdat_colors_26 import color_hex
 import scdat_data_26 as data
 
 
-def get_scan_data(datafile_location):
+def get_scan_data_OLD(datafile_location):
     # create dataframe from Inventory Physical Count Sheet
 
     file_path = Path(PureWindowsPath(datafile_location + "Inventory\\Inventory_Physical_Count.xlsx"))
@@ -29,6 +31,8 @@ def get_scan_data(datafile_location):
 
     # convert scan date to date format
     df['Scan Date'] = pd.to_datetime(df['Scan Date']).dt.date
+
+    st.write(df)
 
     # create dataframe of barcodes ======================================
     file_path = Path(PureWindowsPath(datafile_location + "Inventory\\Inventory_Physical_Count.xlsx"))
@@ -47,8 +51,78 @@ def get_scan_data(datafile_location):
     df_scan = df_scan[df_scan["SKU"] != 'VOID']
     df_scan = df_scan.loc[lambda row: ~ row['SKU'].str.startswith('RVA')]
     df_scan = df_scan.loc[lambda row: ~ row['SKU'].str.startswith('RBX')]
+    df_scan = df_scan.loc[lambda row: ~ row['SKU'].str.startswith('RVP')]
 
+    st.write(df_scan)
     return df_scan
+
+def get_scan_data(datafile_location):
+
+    # ______________ Read Data File _______________________________
+    file_path = Path(PureWindowsPath(datafile_location + "Inventory\\Inventory_Physical_Count.xlsx"))
+    df = (
+        pd.read_excel(
+            file_path,
+            sheet_name="Form Responses 2",
+            usecols=["Timestamp", "Location (SCAN)", "Barcode (SCAN)", "Qty", "SKU (Translation)"]
+        )
+        .rename(columns={
+            "Timestamp": "SCAN DATE",
+            "Location (SCAN)": "LOCATION",
+            "Barcode (SCAN)": "BARCODE",
+            "SKU (Translation)": "SKU"
+        })
+    )
+
+    # ___________ Clean Barcode ____________
+    df["BARCODE"] = (
+        df["BARCODE"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+        .str.replace(" ", "", regex=False)
+    )
+
+    # _____________ Clean Location _______________
+    df["LOCATION"] = (
+        df["LOCATION"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+
+    # ______________ Remove blank locations __________________
+    df = df.loc[df["LOCATION"].ne("")]
+
+    # _____________ Convert scan date _______________________
+    df["SCAN DATE"] = pd.to_datetime(df["SCAN DATE"]).dt.date
+
+    df = df.groupby(['LOCATION', 'SKU'])['QTY'].sum().to_frame().reset_index()
+
+    # st.write(df)
+    # st.stop()
+    #
+    # # create dataframe of barcodes ======================================
+    # file_path = Path(PureWindowsPath(datafile_location + "Inventory\\Inventory_Physical_Count.xlsx"))
+    # df_barcode = pd.read_excel(file_path, sheet_name='codes', header=0)
+    # df_barcode = df_barcode[['Code', 'SKU']]
+    #
+    # df_barcode.columns = (['Barcode', 'SKU'])
+    # df_barcode = df_barcode.applymap(str)
+    # df_barcode['Barcode'] = df_barcode.apply(lambda x: x.iloc[0].upper().strip(), axis=1)
+    # df_barcode['SKU'] = df_barcode.apply(lambda x: x.iloc[1].upper().strip(), axis=1)
+    # df_barcode['SKU'] = df_barcode.apply(lambda x: x.iloc[1].upper().strip(), axis=1)
+    # df_barcode = df_barcode.drop_duplicates(subset=['Barcode'], keep='first')
+    #
+    # df_scan = pd.merge(df, df_barcode, on=["Barcode"], how='left')
+    # df_scan = df_scan.fillna('VOID')
+    # df_scan = df_scan[df_scan["SKU"] != 'VOID']
+    # df_scan = df_scan.loc[lambda row: ~ row['SKU'].str.startswith('RVA')]
+    # df_scan = df_scan.loc[lambda row: ~ row['SKU'].str.startswith('RBX')]
+    # df_scan = df_scan.loc[lambda row: ~ row['SKU'].str.startswith('RVP')]
+    #
+    # st.write(df_scan)
+    return df
 
 
 def scan_data_wh_filter(df, wh):
@@ -69,7 +143,7 @@ def scan_data_wh_filter(df, wh):
         x = ['J', 'K', 'L-']
 
     for i in range(0, len(x)):
-        df_temp = df.loc[lambda row: row['Location'].str.startswith(x[i])]
+        df_temp = df.loc[lambda row: row['LOCATION'].str.startswith(x[i])]
         df_wh = pd.concat([df_wh, df_temp])
 
     df_wh.columns = (['SCAN DATE', 'LOCATION', 'BARCODE', 'QTY', 'SKU'])    # change header to uppercase
@@ -168,11 +242,8 @@ def display_recount_list(datafile_location):
 
     df = get_scan_data(datafile_location)
 
-    # df = df[df['Scan Date'] >= pd.to_datetime(start_date)]
-    # df = df[df['Scan Date'] <= pd.to_datetime(end_date)]
-
-    df = df[df['Scan Date'] >= start_date]
-    df = df[df['Scan Date'] <= end_date]
+    df = df[df['SCAN DATE'] >= start_date]
+    df = df[df['SCAN DATE'] <= end_date]
 
     if len(df) == 0:
         st.warning('Scan Data for date range not found. Please select date range')
@@ -206,8 +277,8 @@ def display_recount_list(datafile_location):
 
     with col1:  # display scan data =======================================
 
-        header_txt1 = 'SCAN LOCATIONS: ' + str(len(df_scan1.drop_duplicates(subset=['LOCATION'], keep='first'))) + ' | SCAN QTY: ' +\
-                      str(utils.format_num(df_scan1['QTY'].sum()))
+        header_txt1 = 'SCAN LOCATIONS: ' + str(len(df.drop_duplicates(subset=['LOCATION'], keep='first'))) + ' | SCAN QTY: ' +\
+                      str(utils.format_num(df['QTY'].sum()))
         header_txt2 = ' | CONSOLIDATED RECORDS: ' + str(len(df_consolidated)) + ' & QTY: ' + str(utils.format_num(df_consolidated['QTY'].sum()))
 
         header_txt = header_txt1 + header_txt2
@@ -215,10 +286,13 @@ def display_recount_list(datafile_location):
             f'<p style="font-family: Book Antiqua; color: {color_hex(164)}; text-align:left; font-size: 16px ;border-radius:2%; line-height:0em;'
             f' margin-top:5px">{header_txt}</p>', unsafe_allow_html=True)
 
-        df_scan1['SCAN DATE'] = pd.to_datetime(df_scan1['SCAN DATE'])
-        df_scan1['SCAN DATE'] = df_scan1['SCAN DATE'].dt.strftime('%Y-%m-%d')  # convert str to date format
+        # df_scan1['SCAN DATE'] = pd.to_datetime(df_scan1['SCAN DATE'])
+        # df_scan1['SCAN DATE'] = df_scan1['SCAN DATE'].dt.strftime('%Y-%m-%d')  # convert str to date format
 
-        AgGrid(df_scan1, height=330, fit_columns_on_grid_load=True)
+        df['SCAN DATE'] = pd.to_datetime(df['SCAN DATE'])
+        df['SCAN DATE'] = df['SCAN DATE'].dt.strftime('%Y-%m-%d')  # convert str to date format
+        # AgGrid(df_scan1, height=330, fit_columns_on_grid_load=True)
+        AgGrid(df, height=330, fit_columns_on_grid_load=True)
         utils.download_csv(df_scan1, 'Download Scan Records')
 
     with col2:  # display ZEN data =======================================
