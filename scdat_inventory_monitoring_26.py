@@ -33,11 +33,11 @@ def last_30days_sales(df_sales, df_current_month, current_month, months, days_el
     )
 
     # ____________ Get previous month sale  ______________________________
-    if days_elapsed < 31:
-        df2 = (
-            df_sales.loc[df_sales['MONTH'] == previous_month, ['SKU', 'TOTAL']]
-            .rename(columns={'TOTAL': 'Total - Previous'})
-        )
+    # if days_elapsed < 31:
+    df2 = (
+        df_sales.loc[df_sales['MONTH'] == previous_month, ['SKU', 'TOTAL']]
+        .rename(columns={'TOTAL': 'Total - Previous'})
+    )
 
     # ____________ Merge current and previous month data ______________________________
     df_last_30d = (
@@ -123,6 +123,7 @@ def yearly_sales(datafile_location):
     # ___________________ convert MONTH to datetime format ________________
     df_sales['MONTH'] = pd.to_datetime(df_sales['MONTH'], format='%b-%y')
 
+
     current_month = df_sales['MONTH'].max()
 
     today = date.today()
@@ -165,10 +166,29 @@ def yearly_sales(datafile_location):
                     )
 
     # _____________ Add one month sale ________________________
+
     df_annual = pd.concat([df_mid_months, df_one_month], ignore_index=True)
+
+    # clean data before group ______________________________
+    df_annual['SUPPLIER'] = (
+        df_annual['SUPPLIER']
+        .astype(str)
+        .str.replace('\xa0', ' ', regex=False)
+        .str.replace('Â', '', regex=False)              # clean "KangdeÂ Silicone"
+        .str.replace('Alba', 'LB Plast', regex=False)   # replace 'Alba'
+        .str.strip()
+    )
+
     df_annual = df_annual.groupby(['SKU', 'SUPPLIER'])['TOTAL'].sum().to_frame().reset_index()
+
+    # st.write(df_annual)
+    # utils.download_csv(df_annual, "Download")
+    # st.stop()
+
     df_annual = df_annual.rename(columns={'TOTAL': 'ANNUAL'})
 
+    # st.write(df_annual)
+    # st.stop()
 
     # _______________ Get Last 60 Days Sale Data _________________________________
     df_last_60d = last_60days_sales(df_sales, df_current_month, current_month, months, days_elapsed)
@@ -188,14 +208,23 @@ def display_inventory_monitoring(datafile_location, suppliers):
     # ____________ Merge 30-days and 60-Days data ______________________________
     df = (
         df_last_30d.merge(df_last_60d, on='SKU', how='outer')
-        .fillna(0)
+        #.fillna(0)
     )
+
+    # st.write(df)
+    #
+    # st.write(df_annual)
+    #
+    # st.stop()
+
 
     # ____________ Merge with Annual data ______________________________
     df = (
         df.merge(df_annual, on='SKU', how='outer')
         .fillna(0)
     )
+
+
 
     # _________________ Get Inventory Data ____________________________________
     df_inventory = (

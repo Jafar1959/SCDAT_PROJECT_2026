@@ -61,7 +61,11 @@ def container_df(datafile_location):
 
     # forward fill columns
     fill_cols = ['PO', 'BOL', 'ODDO_ETA', 'STATE', 'RECEIVED DATE']
-    df[fill_cols] = df[fill_cols].replace(r'^\s*$', pd.NA, regex=True).ffill()
+    df[fill_cols] = (
+                     df[fill_cols]
+                     .replace(r'^\s*$', pd.NA, regex=True)
+                     .ffill()
+                     )
 
     # remove unwanted PO prefixes
     bad_po_prefix = [
@@ -139,14 +143,11 @@ def inventory_df(datafile_location):
     # change column name
     df_inventory.columns = (['SKU', 'Existing Qty'])
 
-    df_inventory['SKU'] = df_inventory['SKU'].replace(r'^\s*$', None, regex=True)   # treat blanks as NaN and drop them
+    # treat blanks as NaN and drop them
+    df_inventory['SKU'] = df_inventory['SKU'].replace(r'^\s*$', None, regex=True)
     df_inventory = df_inventory.dropna(subset=['SKU'])
 
-    # df_inventory = df_inventory['SKU'].fillna('BLANK')  # replace the empty cell with 'BLANK'
-    # df_inventory = df_inventory[df_inventory['SKU'] != 'BLANK']
-
     df_inventory['SKU'] = df_inventory.apply(lambda x: x.iloc[0].strip(), axis=1)   # remove space from SKU
-
 
     # remove the SKU that does not start with RV
     df_inventory = df_inventory.loc[lambda row: row['SKU'].str.startswith('RV')]
@@ -155,7 +156,6 @@ def inventory_df(datafile_location):
 
     df = pd.merge(df_product, df_inventory, on=["SKU"], how='left')
     df = df.fillna(0)
-
 
     df = df.sort_values('SKU', ascending=True)
 
@@ -707,7 +707,7 @@ def sales_trend_df(datafile_location, supplier, model, month_list):
         file_name = y + month_num + '_Sales_' + str(month_list[i]) + '.csv'     # generate monthly sales file name
 
         path = datafile_location + 'Sales\\Monthly_Sales\\MONTHLY\\' + file_name    # read monthly sales file
-        df = pd.read_csv(Path(PureWindowsPath(path)))
+        df = pd.read_csv(Path(PureWindowsPath(path)), encoding='latin1')
         df = df[['SKU', 'SUPPLIER', 'AMAZON', 'ODDO', 'TOTAL']]
 
         df1 = utils.supplier_model_query(df, supplier, model)  # query on supplier & model / color
@@ -843,6 +843,7 @@ def loading_trend_df(datafile_location, supplier, model, month_names):
 
 
 def forecast_df(datafile_location, forecast_month, supplier='ALL'):
+
     # read all Projection files and create a df as per forecast month
     y = forecast_month.split('-')
     year = y[1]     # find year
@@ -863,7 +864,7 @@ def forecast_df(datafile_location, forecast_month, supplier='ALL'):
         source_files = [f for f in source_files if 'SPEED VIETNAM' not in f]  # remove from list
         source_files = [f for f in source_files if 'SPEED_RVA' not in f]      # remove from list
 
-    if len(source_files) == 0:      # if supplier not found in the source_file return empty dataframe
+    if len(source_files) == 0:      # if supplier not found in the source_file return empty dataframe __________
         long_month_name = datetime.strptime(short_month_name, "%b").strftime("%B")
 
         months = list(calendar.month_name)  # get list of 12 months
@@ -889,7 +890,7 @@ def forecast_df(datafile_location, forecast_month, supplier='ALL'):
                            })
         return df_forecast
 
-    else:   # read all source_file and append
+    else:   # read all source_file and append ________________________________
         df_forecast = pd.DataFrame({})
 
         for j in range(0, len(source_files)):
@@ -1012,10 +1013,13 @@ def sales_anatomy_df(datafile_location, month, year):
     df_price = df_price.loc[lambda row: ~ row['SKU'].str.startswith('RVA')]
 
     df_sales = one_month_sales_df(datafile_location, month, year)
-    df_sales = df_sales.loc[lambda row: row['SKU'].str.startswith('RV')]
-    df_sales = df_sales.loc[lambda row: ~ row['SKU'].str.startswith('RVA')]
-    df_sales = df_sales.fillna(0)
-    df_sales = df_sales[df_sales['TOTAL'] != 0]
+    # df_sales = df_sales.loc[lambda row: row['SKU'].str.startswith('RV')]
+
+    prefixes = ('RVA', 'RBX', 'RDM', 'RVP')  # accessories, boxes, dummy faucets, faucet parts
+    df_sales = utils.exclude_sku_prefixes(df_sales, prefixes)
+
+    df_sales = df_sales.fillna(0).query('TOTAL != 0')
+    # df_sales = df_sales[df_sales['TOTAL'] != 0]
 
     total_zen = df_sales['ODDO'].sum()
     total_fba = df_sales['AMAZON'].sum()
@@ -1090,6 +1094,9 @@ def yearly_sales_df(datafile_location, year):
         if str(source_files[i])[0:2] == str(year)[2:4]:
             file_list.append(source_files[i])
 
+    # st.write(file_list)
+    # st.stop()
+
     df_product = product_df(datafile_location)
     df_product = df_product[['SKU', 'SUPPLIER', 'STATUS']]
 
@@ -1104,9 +1111,10 @@ def yearly_sales_df(datafile_location, year):
 
         path = datafile_location + 'Sales\\Monthly_Sales\\MONTHLY\\' + file_list[i]
 
-        df = pd.read_csv(Path(PureWindowsPath(path)))
+        df = pd.read_csv(Path(PureWindowsPath(path)), encoding='latin1')
         df = df[['SKU', 'TOTAL']]
         df = df.rename(columns={'TOTAL': month_name})
+
 
         if i == 0:
             df_sales = pd.merge(df_product, df, on=["SKU"], how='left')
@@ -1184,10 +1192,13 @@ def lowes_sales(datafile_location):
 
     df1 = df1.fillna(0)
 
+
+
     # ============ Total Sales & Monthly Sales ==================
     cols = df1.columns[1:]
     df1['TOTAL'] = df1[cols].sum(axis=1)
     df1['MONTHLY'] = round(df1['TOTAL'] / month_elapsed, 0)
+
 
     # _______________ Add Lowes Shipments ____________________
     path = Path(PureWindowsPath(datafile_location + "LOWES\\Inventory Sent to Lowes.xlsx"))
@@ -1195,13 +1206,14 @@ def lowes_sales(datafile_location):
     df_at_lowes = df_at_lowes[['SKU', 'TOTAL SENT']]
     df_at_lowes = df_at_lowes[df_at_lowes['SKU'] != 'TOTAL']
 
-
+    # st.write(df_at_lowes)
 
     df1 = pd.merge(df1, df_at_lowes, on=["SKU"], how='outer')
     df1['AT LOWES'] = df1['TOTAL SENT'] - df1['TOTAL']
     df1 = df1.drop(columns=['TOTAL SENT'])
 
-    # st.write(df_at_lowes)
+    # st.write(df1)
+    # st.stop()
 
     # ======================== ADD INVENTORY ===================================
     df_inventory = inventory_df(datafile_location)

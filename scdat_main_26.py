@@ -25,12 +25,15 @@ import scdat_sales_analysis_26 as sa
 import scdat_packing_box_order_26 as box
 import scdat_sales_trend_26 as trend
 import scdat_inventory_monitoring_26 as im
+import scdat_fba_list_26 as fba
+import scdat_loading_plan_26 as lp
+import scdat_maruf_data_26 as maruf
 
 
 # ============= my variables =========================
-CURRENT_MONTH = 'Jul'
+CURRENT_MONTH = 'Aug'
 CURRENT_YEAR = '2026'
-FORECAST_MONTH = '07_Jul-2026'
+FORECAST_MONTH = '08_Aug-2026'
 SUPPLIERS = ['ALL',
             'Aquacubic',
             'Bomeijia',
@@ -246,15 +249,19 @@ def display_choices():
                 "Inventory Monitoring",
                 "One Month Sales",
                 "Sales Forecast",
+                "Loading Plan",
                 "Sales Report",
                 "Sales Trend",
                 "Sales Anatomy",
                 "Product Chit",
                 "Backorder List",
+                "FBA List",
                 "Lowes Sales",
                 "Inventory Count - Step 1",
                 "Inventory Count - Step 2",
                 "Box Order Qty",
+                "Maruf Data 1",
+                "Maruf Data 2",
                 "Test"
             ],
             "handler": display_choice2
@@ -296,13 +303,18 @@ def display_choice2(choice1):
         "Sales Report": lambda: sa.display_sales_report_monthly(DATAFILE_LOCATION),
         "Sales Trend": lambda: trend.sales_trend_graph(DATAFILE_LOCATION, SUPPLIERS, FORECAST_MONTH),
         "Sales Anatomy": lambda: sa.sales_anatomy_dashboard(DATAFILE_LOCATION),
-        "Sales Forecast": lambda: sf.holtwinter_forecast(DATAFILE_LOCATION),
+        "Sales Forecast": lambda: sf.sales_forecast(DATAFILE_LOCATION, SUPPLIERS),
+        "Loading Plan": lambda: lp.display_loading_plan(DATAFILE_LOCATION, FORECAST_MONTH),
+        "FBA List": lambda: fba.fba_list(DATAFILE_LOCATION),
         "Backorder List": lambda: bk.backorder_analysis(DATAFILE_LOCATION),
         "Inventory Count - Step 1": lambda: inv_count.display_recount_list(DATAFILE_LOCATION),
         "Inventory Count - Step 2": inv_count.display_recount_analysis,
         "Product Chit": lambda: chit.display_product_chit(DATAFILE_LOCATION),
         "Lowes Sales": lambda: fg.lowes_sales(DATAFILE_LOCATION),
         "Box Order Qty": lambda: box.display_box_order_qty(DATAFILE_LOCATION, SUPPLIERS, FORECAST_MONTH),
+        "Maruf Data 1": lambda: maruf.display_maruf_data(DATAFILE_LOCATION, FORECAST_MONTH),
+        "Maruf Data 2": lambda: maruf.display_maruf_data_2(DATAFILE_LOCATION),
+
         "Test": fg.test,
     }
 

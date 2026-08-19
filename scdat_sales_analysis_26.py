@@ -149,7 +149,6 @@ def display_one_month_sales(datafile_location):
     utils.download_csv(df_filtered, f"Download Sales {month}-{year}")
 
 def sales_anatomy_dashboard(datafile_location):
-    # utils.show_header('Sales Anatomy')
 
     months = list(calendar.month_name)[1:]
     current_month_idx = datetime.now().month
@@ -690,7 +689,7 @@ def current_month_sales_graph(datafile_location, forecast_month, suppliers):
 
     suppliers.remove("ALL")
 
-    suppliers.extend(["KANGDE SILICONE", "SPEED_RVA"])
+    suppliers.extend(["KANGDE SILICONE", "SPEED_RVA", 'LB Plast'])
 
     df_list = []
     for s in suppliers:
@@ -727,7 +726,10 @@ def current_month_sales_graph(datafile_location, forecast_month, suppliers):
 
 
     # _____________ Remove All Accessories Data ________________________________________
-    df = df.loc[lambda row: ~ row['SKU'].str.startswith('RVA')]     # remove all accessories
+    # df = df.loc[lambda row: ~ row['SKU'].str.startswith('RVA')]     # remove all accessories
+
+    prefixes = ('RVA', 'RBX', 'RDM', 'RVP')  # accessories, boxes, dummy faucets, faucet parts
+    df = utils.exclude_sku_prefixes(df, prefixes)
 
     # ______________ Group by Suppliers __________________________________________
     df = df.groupby(['SUPPLIER'])[['FORECAST', 'TOTAL', 'FBA QTY']].sum().reset_index()  # <<<<<<<<<< change in syntex
@@ -893,7 +895,7 @@ def current_month_sales_graph(datafile_location, forecast_month, suppliers):
       
     return
 
-def display_quarterly_report(datafile_location, df, df_revenue_data):
+def display_quarterly_report_OLD(datafile_location, df, df_revenue_data):
 
     # st.write(df)
 
@@ -1163,10 +1165,12 @@ def display_sales_report_monthly(datafile_location):
         month_name = file_name.rsplit('_', 1)[-1].removesuffix('.csv')
 
         # st.write(month_name)
+        # st.write(file_path)
 
         df_temp = pd.read_csv(
             Path(PureWindowsPath(file_path)),
-            usecols=['SKU', 'SUPPLIER', 'TOTAL']
+            usecols=['SKU', 'SUPPLIER', 'TOTAL'],
+            encoding='latin1',
         )
 
         # _______________ Remove Accessories (RVA), Faucet Parts (RVP), Packing Box (RBX) and Display (RDM) __________________

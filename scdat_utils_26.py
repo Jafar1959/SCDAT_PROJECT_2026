@@ -117,6 +117,36 @@ def month_circular_array(start_month, total_month):
     start = start_month - 1
     return [(start + i) % 12 + 1 for i in range(total_month)]
 
+
+def sub_headers(items, height=40, font_size=16, border_radius=12, bg_color="#00688B", border_color="#D8D8D8",):
+
+    cols = st.columns(len(items), gap="small")
+
+    for col, item in zip(cols, items):
+        col.markdown(
+            f"""
+            <div style="
+                display:flex;
+                justify-content:center;
+                align-items:center;
+                height:{height}px;
+                background:{item.get('bg_color', bg_color)};
+                border:1px solid {item.get('border_color', border_color)};
+                border-radius:{border_radius}px;
+                color:{item.get('color', '#444')};
+                font-size:{item.get('font_size', font_size)}px;
+                font-family:Georgia, serif;
+                font-weight:500;
+                white-space:nowrap;
+            ">
+                {item['text']}: {item['value']}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    st.write("")
+    return
+
 # _______________ Function not Optimized (OLD) __________________________________
 def get_month_and_year_OLD(forecast_month):
     month = ''

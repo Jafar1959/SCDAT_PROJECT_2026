@@ -163,7 +163,7 @@ def inventory_dashboard(datafile_location, forecast_month, supplier, model):
     x, y = 0.5, 0.5
 
     fig.add_annotation(x=x, y=y + 0.25,
-                       text='Forecast: ' + str(total_forecast),
+                       text='Forecast: ' + str(int(total_forecast)),
                        font=dict(size=17, family='Book Antiqua', color=color_hex(292)),
                        showarrow=False)
 

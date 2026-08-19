@@ -70,6 +70,7 @@ def get_scan_data(datafile_location):
             "Timestamp": "SCAN DATE",
             "Location (SCAN)": "LOCATION",
             "Barcode (SCAN)": "BARCODE",
+            "Qty": "QTY",
             "SKU (Translation)": "SKU"
         })
     )
@@ -97,31 +98,20 @@ def get_scan_data(datafile_location):
     # _____________ Convert scan date _______________________
     df["SCAN DATE"] = pd.to_datetime(df["SCAN DATE"]).dt.date
 
-    df = df.groupby(['LOCATION', 'SKU'])['QTY'].sum().to_frame().reset_index()
+    # df = df.groupby(['SCAN DATE', 'LOCATION', 'BARCODE', 'SKU'])['QTY'].sum().to_frame().reset_index()
 
+    # df = (
+    #     df.groupby(['SCAN DATE', 'LOCATION', 'SKU'], as_index=False)
+    #     .agg({
+    #         #'SCAN DATE': 'first',  # Keep the first scan date
+    #         'BARCODE': 'first',  # Keep the first barcode
+    #         'QTY': 'sum'  # Sum quantities
+    #     })
+    #     [['SCAN DATE', 'LOCATION', 'BARCODE', 'QTY', 'SKU']]
+    # )
     # st.write(df)
-    # st.stop()
-    #
-    # # create dataframe of barcodes ======================================
-    # file_path = Path(PureWindowsPath(datafile_location + "Inventory\\Inventory_Physical_Count.xlsx"))
-    # df_barcode = pd.read_excel(file_path, sheet_name='codes', header=0)
-    # df_barcode = df_barcode[['Code', 'SKU']]
-    #
-    # df_barcode.columns = (['Barcode', 'SKU'])
-    # df_barcode = df_barcode.applymap(str)
-    # df_barcode['Barcode'] = df_barcode.apply(lambda x: x.iloc[0].upper().strip(), axis=1)
-    # df_barcode['SKU'] = df_barcode.apply(lambda x: x.iloc[1].upper().strip(), axis=1)
-    # df_barcode['SKU'] = df_barcode.apply(lambda x: x.iloc[1].upper().strip(), axis=1)
-    # df_barcode = df_barcode.drop_duplicates(subset=['Barcode'], keep='first')
-    #
-    # df_scan = pd.merge(df, df_barcode, on=["Barcode"], how='left')
-    # df_scan = df_scan.fillna('VOID')
-    # df_scan = df_scan[df_scan["SKU"] != 'VOID']
-    # df_scan = df_scan.loc[lambda row: ~ row['SKU'].str.startswith('RVA')]
-    # df_scan = df_scan.loc[lambda row: ~ row['SKU'].str.startswith('RBX')]
-    # df_scan = df_scan.loc[lambda row: ~ row['SKU'].str.startswith('RVP')]
-    #
-    # st.write(df_scan)
+    # utils.download_csv(df, "D")
+
     return df
 
 
@@ -146,6 +136,7 @@ def scan_data_wh_filter(df, wh):
         df_temp = df.loc[lambda row: row['LOCATION'].str.startswith(x[i])]
         df_wh = pd.concat([df_wh, df_temp])
 
+    # st.write(df_wh)
     df_wh.columns = (['SCAN DATE', 'LOCATION', 'BARCODE', 'QTY', 'SKU'])    # change header to uppercase
 
     # st.write(df_wh)
@@ -244,6 +235,7 @@ def display_recount_list(datafile_location):
 
     df = df[df['SCAN DATE'] >= start_date]
     df = df[df['SCAN DATE'] <= end_date]
+
 
     if len(df) == 0:
         st.warning('Scan Data for date range not found. Please select date range')
