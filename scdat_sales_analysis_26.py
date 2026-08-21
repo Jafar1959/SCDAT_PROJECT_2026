@@ -10,22 +10,17 @@ import datetime
 from datetime import date
 from datetime import datetime
 
-#from dateutil.relativedelta import relativedelta
-#from datetime import date, timedelta
-
 import calendar
 import os
 
 import statistics
 from pathlib import Path, PureWindowsPath    # for Window & Mac OS path-slash '\' or '/'
 import math
-import glob
+# import glob
 
 import scdat_data_26 as data
 import scdat_utils_26 as utils
 from scdat_utils_26 import color_hex
-
-# from scdat_colors_26 import color_hex
 
 SUPPLIER_LIST = ["ALL",
                  "Speed",
@@ -173,11 +168,6 @@ def sales_anatomy_dashboard(datafile_location):
         else:
             txt = month + ' - ' + str(year) + ' | Sales Anatomy'
 
-        # st.markdown(
-        #     f'<p style="font-family: Book Antiqua; color: {color_hex(280)}; text-align:left; font-size: 20px ;border-radius:1%;'
-        #     f' line-height:0em; margin-top:0px"> {txt} </p>',
-        #     unsafe_allow_html=True)
-
         utils.show_header(txt)
 
         # --------------- PRICE DISTRIBUTION BAR GRAPH -------------------------------
@@ -195,8 +185,6 @@ def sales_anatomy_dashboard(datafile_location):
 
         # df_price_less_1k.loc[len(df_price_less_1k)-1] = ['1000', sku_greater_1k, sales_greater_1k, turnover_greater_1k]
         df_price_less_1k.loc[len(df_price_less_1k)-1] = [1000, sku_greater_1k, sales_greater_1k, turnover_greater_1k]
-
-
 
         # add REMARK = SALES [SKU]
         df_price_less_1k['REMARK'] = df_price_less_1k.apply(lambda x: str(utils.format_num(x.iloc[2])) +
@@ -238,16 +226,14 @@ def sales_anatomy_dashboard(datafile_location):
         # ================= TURNOVER % =========================
         fig1.add_trace(go.Scatter(x=df_price_less_1k['PRICE'],
                                   y=df_price_less_1k['TURNOVER_%'],
-                                 #fill='tozeroy',  # fill down to xaxis
-                                 #fillcolor='rgba(255, 127, 36, 0.1)',
-                                 mode='lines',
-                                 line={'dash': 'solid', 'color': color_hex(47)},
-                                 name="REVENUE %"
+                                  mode='lines',
+                                  line={'dash': 'solid', 'color': color_hex(47)},
+                                  name="REVENUE"
                                   ),
                                 secondary_y=True
                        )
 
-        fig1.update_yaxes(title_text="REVENUE %", range=[0, df_price_less_1k['TURNOVER_%'].max() * 1.1], secondary_y=True)
+        fig1.update_yaxes(title_text="REVENUE", range=[0, df_price_less_1k['TURNOVER_%'].max() * 1.1], secondary_y=True)
         fig1.update_layout(legend=dict(title_font_family="Book Antiqua", font=dict(size=13), x=0.45, y=0.85))
 
         fig1.update_xaxes(
@@ -606,7 +592,6 @@ def sales_anatomy_dashboard(datafile_location):
 
     return
 
-
 def median_table(df_sales_and_price):
     df = df_sales_and_price
 
@@ -629,23 +614,23 @@ def median_table(df_sales_and_price):
     # Calculate metrics for prices < median price ==========
     total_sku1 = df_less_than_median['SKU'].count()
     total_sale1 = df_less_than_median['TOTAL'].sum()
-    total_turnover1 = round(df_less_than_median['TURNOVER_%'].sum(), 0)
+    total_turnover1 = round(df_less_than_median['TURNOVER_%'].sum()/1000000, 2)
 
     # Calculate metrics for prices = median price ============
     total_sku3 = df_equal_to_median['SKU'].count()
     total_sale3 = df_equal_to_median['TOTAL'].sum()
-    total_turnover3 = round(df_equal_to_median['TURNOVER_%'].sum(), 0)
+    total_turnover3 = round(df_equal_to_median['TURNOVER_%'].sum()/1000000, 2)
 
     # Calculate metrics for prices > median price  =============
     total_sku2 = df_greater_than_median['SKU'].count()
     total_sale2 = df_greater_than_median['TOTAL'].sum()
-    total_turnover2 = round(df_greater_than_median['TURNOVER_%'].sum(), 0)
+    total_turnover2 = round(df_greater_than_median['TURNOVER_%'].sum()/1000000, 2)
 
     # Create a summary DataFrame for median comparison
     df_median = pd.DataFrame({'COST': ['< $' + utils.format_num(median), '=  $' + utils.format_num(median), '>  $' + utils.format_num(median)],
                               'SKU': [total_sku1, total_sku3, total_sku2],
                               'SALES QTY': [total_sale1, total_sale3, total_sale2],
-                              'REVENUE %': [total_turnover1, total_turnover3, total_turnover2],
+                              'REVENUE(M)': [total_turnover1, total_turnover3, total_turnover2],
                              })
 
     # Generate the table visualization using Plotly
@@ -661,7 +646,7 @@ def median_table(df_sales_and_price):
                     align=['center']),
 
             cells=dict(
-                    values=[df_median.COST, df_median.SKU, df_median['SALES QTY'], df_median['REVENUE %']],
+                    values=[df_median.COST, df_median.SKU, df_median['SALES QTY'], df_median['REVENUE(M)']],
                     font_size=14,
                     height=28,
                     fill_color=color_hex(220),
@@ -670,7 +655,7 @@ def median_table(df_sales_and_price):
             ])
 
     # Adjust the layout and render the table
-    fig.update_layout(width=280, height=120, margin=dict(l=0, r=0, b=0, t=0))
+    fig.update_layout(width=280, height=130, margin=dict(l=0, r=0, b=0, t=0))
     st.plotly_chart(fig, use_container_width=False)
 
     # Provide a download option for the DataFrame
@@ -895,254 +880,6 @@ def current_month_sales_graph(datafile_location, forecast_month, suppliers):
       
     return
 
-def display_quarterly_report_OLD(datafile_location, df, df_revenue_data):
-
-    # st.write(df)
-
-    first_year = df[0:1].iloc[0][0]
-    first_year = first_year[4:7]
-
-    total_rows = len(df)
-    last_year = df[total_rows - 1: total_rows].iloc[0][0]
-    last_year = last_year[4:7]
-
-    q1 = ['Jan', 'Feb', 'Mar']
-    q2 = ['Apr', 'May', 'Jun']
-    q3 = ['Jul', 'Aug', 'Sep']
-    q4 = ['Oct', 'Nov', 'Dec']
-
-    quarters = [q1, q2, q3, q4]
-
-    df_all_quarter = pd.DataFrame({'Supplier': []})
-
-    for y in range(int(first_year), int(last_year)-1, -1):
-
-        quarter_no = 1
-
-        for m in range(0, len(quarters)):
-            m1 = quarters[m][0] + '-' + str(y)
-            m2 = quarters[m][1] + '-' + str(y)
-            m3 = quarters[m][2] + '-' + str(y)
-
-            df_quarter = df[(df['Month'] == m1) | (df['Month'] == m2) | (df['Month'] == m3)]
-
-            if len(df_quarter) > 0:
-                df_quarter = df_quarter.sum(numeric_only=True, axis=0).to_frame().reset_index()
-
-                q = '20' + str(y) + '-' + 'Q' + str(quarter_no)
-                df_quarter.columns = (['Supplier', q])
-
-                df_all_quarter = pd.merge(df_all_quarter, df_quarter, on=['Supplier'], how='outer')
-
-                quarter_no += 1
-
-    df1 = df_all_quarter.set_index('Supplier').transpose().reset_index()
-    df1 = df1.rename(columns={'index': 'Quarter'})
-    df1 = df1.sort_values('Quarter', ascending=False)
-
-    # st.write(df1)
-
-    col1, col2 = st.columns([7.0, 1])
-    with col1:
-        text = 'Quarterly Sales Report'
-        st.markdown(
-            f'<p style="font-family: Book Antiqua; color: {color_hex(118)}; text-align:left; font-size: 18px ;border-radius:2%; line-height:0em; '
-            f'margin-top:1px"> {text} </p>', unsafe_allow_html=True)
-
-        cols = df1.columns
-        fig = go.Figure(data=[go.Table(
-        #columnwidth=[15, 18, 18, 16, 16, 16, 16, 14, 16, 16, 20, 18, 16, 16, 14, 14, 18, 18],
-
-        columnwidth=[14,    # Quarter
-                     16,    # Aquacubic
-                     14,    # Bomeijia
-                     20,    # CAE Sanitary
-                     13,    # Carysil
-                     14,    # Changie
-                     12,    # Elleci
-                     14,    # Galassia
-                     11,    # Huayi
-                     12,    # Nicos
-                     13,    # Plados
-                     13,    # Speed
-                     22,    # Speed Vietnam
-                     17,    # Stile Libero
-                     19,    # UAE Fireclay
-                     12,    # Wisdom
-                     12,    # Xindeli
-                     10,    # Yalos
-                     12,    # Sink
-                     16,    # Accessories
-                     14],   # Revenue
-
-        header=dict(values=list(cols),
-                    fill_color=[color_hex(118)] + [color_hex(66)]*17 + [color_hex(234)] + ['grey'] + [color_hex(47)],
-                    line_color='white',
-                    font_color='white',
-                    font_size=13,
-                    height=28,
-                    align=['left', 'center']),
-        cells=dict(
-            values=[df1[cols[0]], df1[cols[1]], df1[cols[2]], df1[cols[3]], df1[cols[4]],
-                    df1[cols[5]], df1[cols[6]], df1[cols[7]], df1[cols[8]], df1[cols[9]], df1[cols[10]], df1[cols[11]], df1[cols[12]],
-                    df1[cols[13]], df1[cols[14]], df1[cols[15]], df1[cols[16]], df1[cols[17]], df1[cols[18]], df1[cols[19]], df1[cols[20]]],
-            font_size=13,
-            height=28,
-            fill_color=['lightblue'] + [color_hex(12)]*17 + ['lightpink', 'lightgrey'] + [color_hex(16)],
-            line_color='white',
-            align=['left', 'right']))
-    ])
-        fig.update_layout(width=700, height=8 * 28 - 3, margin=dict(l=0, r=0, b=0, t=0))
-
-        st.plotly_chart(fig, use_container_width=True)
-        ut.download_csv(df1, 'Download Quarterly Sales Report')
-
-    # st.write(df1)
-    # st.stop()
-    display_supplier_wise_quarterly_report(datafile_location, df1, df_revenue_data)
-
-    return
-
-
-def display_sales_report_OLD(datafile_location, supplier_list):
-
-    values = data.quarterly_revenue_df(datafile_location)
-    df_revenue = values[0]
-    df_revenue_data = values[1]
-
-    supplier_list.sort()
-    # st.write(supplier_list)
-    # st.stop()
-
-    col1, col2 = st.columns([6.4, 1])
-
-    path = datafile_location + 'Sales\\Monthly_Sales\\MONTHLY' + '\\'
-    source_files = os.listdir(Path(PureWindowsPath(path)))
-    source_files.sort(reverse=True)
-
-    df_all_month = pd.DataFrame({})
-
-    for i in range(0, len(source_files)):
-
-        file_path = path + str(source_files[i])
-
-        # get month name from file name
-        file_name = str(source_files[i])  # get file name
-        month_name = file_name.split('_')  # split file name based on '_'
-        month_name = month_name[2][:-4]  # get last portion and remove .csv
-
-        df = pd.read_csv(Path(PureWindowsPath(file_path)))
-
-        df = df[['SKU', 'SUPPLIER', 'TOTAL']]
-
-        df_sink = df.loc[lambda row: ~ row['SKU'].str.startswith('RVA')]
-        df_accessories = df.loc[lambda row: row['SKU'].str.startswith('RVA')]
-
-        df_all_supplier = pd.DataFrame({'Month': []})
-
-        for j in range(0, len(supplier_list)):
-            supplier = supplier_list[j]
-            df_supplier = df_sink[df_sink['SUPPLIER'] == supplier]
-
-            total_sales = df_supplier['TOTAL'].sum()
-
-            df_month = pd.DataFrame({'Month': [month_name],
-                                     supplier: [total_sales],
-                                     })
-
-            df_all_supplier = pd.merge(df_all_supplier, df_month, on=["Month"], how='outer')
-
-        df_all_supplier['Sink'] = df_all_supplier.sum(numeric_only=True, axis=1)
-        df_all_supplier['Accessories'] = df_accessories['TOTAL'].sum()
-
-        df_all_month = pd.concat([df_all_month, df_all_supplier])
-
-    # Add alternating 'color1' and 'color2' values in a new column
-    if len(df_all_month) > 1:
-        df_all_month['color'] = ['rgb(240, 248, 255)' if i % 2 == 0 else 'rgb(189, 215, 231)' for i in range(len(df_all_month))]
-    else:
-        df_all_month['color'] = ['rgb(189, 215, 231)']
-
-
-    # st.write(df_all_month)
-    #
-    # df_transposed = df_all_month.T
-    # st.write(df_transposed)
-    #
-    # st.stop()
-    # col1, col2 = st.columns([2, 1])
-
-    # with col1:
-    cols = df_all_month.columns
-    fig = go.Figure(data=[go.Table(
-
-        columnwidth=[12,    # Month
-                     16,    # Aquacubic
-                     14,    # Bomeijia
-                     19,    # CAE Sanitary
-                     13,    # Carysil
-                     14,    # Changie
-                     12,    # Elleci
-                     14,    # Galassia
-                     11,    # Huayi
-                     12,    # Nicos
-                     13,    # Plados
-                     13,    # Speed
-                     21,    # Speed Vietnam
-                     17,    # Stile Libero
-                     18,    # UAE Fireclay
-                     12,    # Wisdom
-                     12,    # Xindeli
-                     11,    # Yalos
-                     12,    # Sink
-                     16],   # Accessories
-
-        header=dict(values=list(cols)[:-1],
-                    fill_color=[color_hex(118)] + [color_hex(66)] * 17 + [color_hex(234), 'grey'],
-                    line_color='white',
-                    font_color='white',
-                    font_size=13,
-                    height=30,
-
-                    align=['left', 'center']),
-        cells=dict(
-            values=[df_all_month[cols[0]], df_all_month[cols[1]], df_all_month[cols[2]], df_all_month[cols[3]], df_all_month[cols[4]],
-                    df_all_month[cols[5]], df_all_month[cols[6]], df_all_month[cols[7]], df_all_month[cols[8]], df_all_month[cols[9]],
-                    df_all_month[cols[10]], df_all_month[cols[11]], df_all_month[cols[12]], df_all_month[cols[13]], df_all_month[cols[14]],
-                    df_all_month[cols[15]], df_all_month[cols[16]], df_all_month[cols[17]], df_all_month[cols[18]], df_all_month[cols[19]]
-                    ],
-            font_size=14,
-            height=30,
-            fill_color=[df_all_month.color],
-            line_color='white',
-            align=['left', 'right']))
-    ])
-
-    total_rows = len(df_all_month)
-    first_month = df_all_month['Month'].tail(total_rows).values[0]
-    last_month = df_all_month['Month'].tail(total_rows - 12).values[0]
-
-    with col1:
-        text = '13-Month Sales Report | ' + first_month + ' to ' + last_month + ' | ' + utils.get_todays_date()    # + ' | Total Months: 12' # + str(
-        # len(' \                                                                                         'source_files))
-        st.markdown(
-            f'<p style="font-family: Book Antiqua; color: {color_hex(118)}; text-align:left; font-size: 18px ;border-radius:2%; line-height:0em; '
-            f'margin-top:4px"> {text} </p>', unsafe_allow_html=True)
-
-        fig.update_layout(height=14*30-3, margin=dict(l=0, r=0, b=0, t=0))
-
-        st.plotly_chart(fig, use_container_width=True)
-
-        ut.download_csv(df_all_month, 'Download Sales Report')
-
-    df_all_month = pd.merge(df_all_month, df_revenue, on=["Month"], how='left')
-    # st.write(df_all_month)
-    # st.stop()
-
-    display_quarterly_report(datafile_location, df_all_month, df_revenue_data)
-
-    return df_revenue_data
-
 def display_sales_report_monthly(datafile_location):
     # ______________ Get file list in the directory 'Sales\\Monthly_Sales\\MONTHLY' _________________
     path = datafile_location + 'Sales\\Monthly_Sales\\MONTHLY' + '\\'
@@ -1161,8 +898,9 @@ def display_sales_report_monthly(datafile_location):
         file_path = path + str(source_files[i])
 
         # ___________ get month name from file name _______________________
-        file_name = str(source_files[i])  # get file name
-        month_name = file_name.rsplit('_', 1)[-1].removesuffix('.csv')
+        file_name = source_files[i]  # get file name
+        # month_name = file_name.rsplit('_', 1)[-1].removesuffix('.csv')
+        month_name = file_name.split('_')[2][:-4]
 
         # st.write(month_name)
         # st.write(file_path)
