@@ -1030,7 +1030,12 @@ def sales_anatomy_df(datafile_location, month, year):
 
     df['PRICE'] = df['PRICE'].astype(int)
     df['TURNOVER'] = df['PRICE'] * df['TOTAL']
-    df['TURNOVER_%'] = df['TURNOVER'] * 100/df['TURNOVER'].sum()
+    # df['TURNOVER_%'] = df['TURNOVER'] * 100/df['TURNOVER'].sum()
+
+    # st.write(df)
+    # st.stop()
+
+    df['TURNOVER_%'] = df['TURNOVER']   # in thousands
 
     # st.write(df)
     # st.write(df_price)
