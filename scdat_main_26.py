@@ -28,12 +28,13 @@ import scdat_inventory_monitoring_26 as im
 import scdat_fba_list_26 as fba
 import scdat_loading_plan_26 as lp
 import scdat_maruf_data_26 as maruf
+import scdat_my_attendance_26 as attendance
 
 
 # ============= my variables =========================
-CURRENT_MONTH = 'Aug'
+CURRENT_MONTH = 'Sep'
 CURRENT_YEAR = '2026'
-FORECAST_MONTH = '08_Aug-2026'
+FORECAST_MONTH = '09_Sep-2026'
 SUPPLIERS = ['ALL',
             'Aquacubic',
             'Bomeijia',
@@ -262,6 +263,7 @@ def display_choices():
                 "Box Order Qty",
                 "Maruf Data 1",
                 "Maruf Data 2",
+                "Attendance",
                 "Test"
             ],
             "handler": display_choice2
@@ -314,6 +316,7 @@ def display_choice2(choice1):
         "Box Order Qty": lambda: box.display_box_order_qty(DATAFILE_LOCATION, SUPPLIERS, FORECAST_MONTH),
         "Maruf Data 1": lambda: maruf.display_maruf_data(DATAFILE_LOCATION, FORECAST_MONTH),
         "Maruf Data 2": lambda: maruf.display_maruf_data_2(DATAFILE_LOCATION),
+        "Attendance": lambda: attendance.display_my_attendance(DATAFILE_LOCATION),
 
         "Test": fg.test,
     }

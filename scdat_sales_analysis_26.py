@@ -627,10 +627,12 @@ def median_table(df_sales_and_price):
     total_turnover2 = round(df_greater_than_median['TURNOVER_%'].sum()/1000000, 2)
 
     # Create a summary DataFrame for median comparison
-    df_median = pd.DataFrame({'COST': ['< $' + utils.format_num(median), '=  $' + utils.format_num(median), '>  $' + utils.format_num(median)],
-                              'SKU': [total_sku1, total_sku3, total_sku2],
-                              'SALES QTY': [total_sale1, total_sale3, total_sale2],
-                              'REVENUE(M)': [total_turnover1, total_turnover3, total_turnover2],
+    df_median = pd.DataFrame({'COST': ['< $' + utils.format_num(median), '=  $' + utils.format_num(median), '>  $' + utils.format_num(median),
+                                       'TOTAL'],
+                              'SKU': [total_sku1, total_sku3, total_sku2, (total_sku1 + total_sku3 + total_sku2)],
+                              'SALES QTY': [total_sale1, total_sale3, total_sale2, (total_sale1 + total_sale3 + total_sale2)],
+                              'REVENUE(M)': [total_turnover1, total_turnover3, total_turnover2, (total_turnover1 + total_turnover3 +
+                                                                                                 total_turnover2).round(2)],
                              })
 
     # Generate the table visualization using Plotly
@@ -649,13 +651,13 @@ def median_table(df_sales_and_price):
                     values=[df_median.COST, df_median.SKU, df_median['SALES QTY'], df_median['REVENUE(M)']],
                     font_size=14,
                     height=28,
-                    fill_color=color_hex(220),
+                    fill_color=[["#B0C4DE" if i == 3 else "#CAE1FF" for i in range(len(df_median))]],  #color_hex(220),
                     line_color='white',
                      align=['center']))
             ])
 
     # Adjust the layout and render the table
-    fig.update_layout(width=280, height=130, margin=dict(l=0, r=0, b=0, t=0))
+    fig.update_layout(width=280, height=155, margin=dict(l=0, r=0, b=0, t=0))
     st.plotly_chart(fig, use_container_width=False)
 
     # Provide a download option for the DataFrame
@@ -1203,7 +1205,6 @@ def display_quarterly_sales_report_supplier_wise(df, df_sku):
     mygrid[row][col].plotly_chart(fig1, width='stretch')
 
     return
-
 
 def display_sales_report_product_level_summary(df):
     # st.write(df)

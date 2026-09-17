@@ -13,49 +13,6 @@ from scdat_utils_26 import color_hex
 # from scdat_colors_26 import color_hex
 import scdat_data_26 as data
 
-
-def get_scan_data_OLD(datafile_location):
-    # create dataframe from Inventory Physical Count Sheet
-
-    file_path = Path(PureWindowsPath(datafile_location + "Inventory\\Inventory_Physical_Count.xlsx"))
-    df = pd.read_excel(file_path, sheet_name='Form Responses 2', header=0)
-    df = df[['Timestamp', 'Location (SCAN)', 'Barcode (SCAN)', 'Qty']]
-    df.columns = (['Scan Date', 'Location', 'Barcode', 'Qty'])
-
-    # remove leading and trailing spaces and covert to Uppercase ======================
-    df['Barcode'] = df.apply(lambda x: str(x.iloc[2]).strip().upper(), axis=1)
-    df['Barcode'] = df.apply(lambda x: str(x.iloc[2]).replace(" ", ""), axis=1)     # remove space between words
-
-    df['Location'] = df.apply(lambda x: str(x.iloc[1]).strip().upper(), axis=1)
-    df = df[df["Location"] != '']
-
-    # convert scan date to date format
-    df['Scan Date'] = pd.to_datetime(df['Scan Date']).dt.date
-
-    st.write(df)
-
-    # create dataframe of barcodes ======================================
-    file_path = Path(PureWindowsPath(datafile_location + "Inventory\\Inventory_Physical_Count.xlsx"))
-    df_barcode = pd.read_excel(file_path, sheet_name='codes', header=0)
-    df_barcode = df_barcode[['Code', 'SKU']]
-
-    df_barcode.columns = (['Barcode', 'SKU'])
-    df_barcode = df_barcode.applymap(str)
-    df_barcode['Barcode'] = df_barcode.apply(lambda x: x.iloc[0].upper().strip(), axis=1)
-    df_barcode['SKU'] = df_barcode.apply(lambda x: x.iloc[1].upper().strip(), axis=1)
-    df_barcode['SKU'] = df_barcode.apply(lambda x: x.iloc[1].upper().strip(), axis=1)
-    df_barcode = df_barcode.drop_duplicates(subset=['Barcode'], keep='first')
-
-    df_scan = pd.merge(df, df_barcode, on=["Barcode"], how='left')
-    df_scan = df_scan.fillna('VOID')
-    df_scan = df_scan[df_scan["SKU"] != 'VOID']
-    df_scan = df_scan.loc[lambda row: ~ row['SKU'].str.startswith('RVA')]
-    df_scan = df_scan.loc[lambda row: ~ row['SKU'].str.startswith('RBX')]
-    df_scan = df_scan.loc[lambda row: ~ row['SKU'].str.startswith('RVP')]
-
-    st.write(df_scan)
-    return df_scan
-
 def get_scan_data(datafile_location):
 
     # ______________ Read Data File _______________________________
@@ -97,20 +54,6 @@ def get_scan_data(datafile_location):
 
     # _____________ Convert scan date _______________________
     df["SCAN DATE"] = pd.to_datetime(df["SCAN DATE"]).dt.date
-
-    # df = df.groupby(['SCAN DATE', 'LOCATION', 'BARCODE', 'SKU'])['QTY'].sum().to_frame().reset_index()
-
-    # df = (
-    #     df.groupby(['SCAN DATE', 'LOCATION', 'SKU'], as_index=False)
-    #     .agg({
-    #         #'SCAN DATE': 'first',  # Keep the first scan date
-    #         'BARCODE': 'first',  # Keep the first barcode
-    #         'QTY': 'sum'  # Sum quantities
-    #     })
-    #     [['SCAN DATE', 'LOCATION', 'BARCODE', 'QTY', 'SKU']]
-    # )
-    # st.write(df)
-    # utils.download_csv(df, "D")
 
     return df
 

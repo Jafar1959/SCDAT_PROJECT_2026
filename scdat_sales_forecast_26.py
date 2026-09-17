@@ -543,7 +543,7 @@ def sales_forecast(datafile_location, suppliers):
         height = len(df_show)*35
         if height > 600:
             height=600
-        AgGrid(df_show, gridOptions=gb.build(), custom_css=custom_css, height=height, allow_unsafe_jscode=True)
+        AgGrid(df_show, gridOptions=gb.build(), custom_css=custom_css, height=height, fit_columns_on_grid_load=True, allow_unsafe_jscode=True)
 
     st.sidebar.markdown(
         f'<p style="font-family: Book Antiqua; color: {color_hex(13)}; text-align:center; font-size: 18px ;border-radius:1%;'

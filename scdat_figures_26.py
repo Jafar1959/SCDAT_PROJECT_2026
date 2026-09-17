@@ -144,7 +144,463 @@ def data_file_status(datafile_location):
         margin=dict(l=0, r=0, b=0, t=0)
     )
 
+    #display_opening_page(datafile_location, df)
     return fig
+
+
+def display_opening_page(datafile_location, df):
+    image_location = Path(PureWindowsPath(datafile_location + "Images\\SCDAT2.png"))
+    st.write(image_location)
+
+    html = f"""
+    <div class="brand-card">
+        <img src="{image_location}"
+             style="width:800px;">  
+             DATA FILE STATUS
+        <div class="brand-title">
+            Data Management Dashboard
+        </div>
+    </div>
+    """
+    st.markdown(html, unsafe_allow_html=True)
+    st.stop()
+    # ---------------------------------------------------------
+    # HEADER
+    # ---------------------------------------------------------
+    st.markdown(
+        f"""
+            <div style="
+                background: linear-gradient(90deg, #174A7C, #1F5D96);
+                border-radius: 10px;
+                padding: 10px 21px;
+                margin-bottom: 16px;
+                color: white;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            ">
+                <div style="
+                    font-size: 27px;
+                    font-weight: 700;
+                    letter-spacing: 0.3px;
+                ">
+                    📅 SCDAT
+                    <span style="margin: 0 12px; opacity: 0.8;">|</span>
+                    <span style="font-size: 20px; font-weight: 500;">
+                        {"DATA FILE STATUS | "} {utils.get_todays_date()}
+                    </span>
+                </div>
+            </div>
+            """,
+        unsafe_allow_html=True
+    )
+
+    # ---------------------------------------------------------
+    # CSS
+    # ---------------------------------------------------------
+    st.markdown("""
+    <style>
+
+        /* Remove some default Streamlit spacing */
+        .block-container {
+            padding-top: 1.5rem;
+            padding-left: 2rem;
+            padding-right: 2rem;
+            max-width: 1500px;
+        }
+
+        /* Main page */
+        .dashboard {
+            display: grid;
+            grid-template-columns: 36% 64%;
+            gap: 25px;
+            align-items: stretch;
+        }
+
+        /* -------------------------------------------------- */
+        /* LEFT BRANDING CARD */
+        /* -------------------------------------------------- */
+
+        .brand-card {
+            min-height: 610px;
+            border-radius: 18px;
+            background: linear-gradient(145deg, #ffffff, #f5f8fa);
+            border: 1px solid #e3e8ec;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.06);
+
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+
+            padding: 35px;
+            box-sizing: border-box;
+        }
+
+        .brand-logo {
+            width: 78%;
+            max-width: 430px;
+            margin-bottom: 25px;
+        }
+
+        .brand-title {
+            font-family: "Book Antiqua", serif;
+            font-size: 28px;
+            font-weight: bold;
+            color: #555;
+            margin-top: 10px;
+        }
+
+        .brand-subtitle {
+            font-family: "Book Antiqua", serif;
+            font-size: 15px;
+            color: #999;
+            margin-top: 5px;
+        }
+
+        /* -------------------------------------------------- */
+        /* RIGHT STATUS CARD */
+        /* -------------------------------------------------- */
+
+        .status-card {
+            min-height: 610px;
+            border-radius: 18px;
+            background: white;
+            border: 1px solid #e3e8ec;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.06);
+            padding: 25px;
+            box-sizing: border-box;
+        }
+
+        .status-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+
+            padding-bottom: 18px;
+            margin-bottom: 12px;
+
+            border-bottom: 1px solid #e8ecef;
+        }
+
+        .status-title {
+            font-family: "Book Antiqua", serif;
+            font-size: 23px;
+            font-weight: bold;
+            color: #c58a00;
+        }
+
+        .status-date {
+            font-size: 14px;
+            color: #777;
+            background: #f7f7f7;
+            padding: 7px 12px;
+            border-radius: 8px;
+        }
+
+        /* -------------------------------------------------- */
+        /* TABLE */
+        /* -------------------------------------------------- */
+
+        .file-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            overflow: hidden;
+
+            font-family: Arial, sans-serif;
+            font-size: 13px;
+        }
+
+        .file-table th {
+            background: #e9d477;
+            color: #333;
+            font-weight: bold;
+
+            padding: 11px 10px;
+            text-align: left;
+
+            border-bottom: 2px solid #d6bd55;
+        }
+
+        .file-table th:first-child {
+            border-top-left-radius: 8px;
+        }
+
+        .file-table th:last-child {
+            border-top-right-radius: 8px;
+        }
+
+        .file-table td {
+            padding: 9px 10px;
+            border-bottom: 1px solid #edf0f2;
+            color: #34495e;
+        }
+
+        .file-table tr:nth-child(even) td {
+            background: #f5f9f6;
+        }
+
+        .file-table tr:nth-child(odd) td {
+            background: #ffffff;
+        }
+
+        .file-table tr:hover td {
+            background: #fff9df;
+        }
+
+        /* Folder */
+        .folder {
+            font-weight: 600;
+            color: #52616b;
+            white-space: nowrap;
+        }
+
+        .folder-icon {
+            margin-right: 6px;
+            font-size: 15px;
+        }
+
+        /* File */
+        .file-name {
+            color: #34495e;
+            font-weight: 500;
+        }
+
+        .file-icon {
+            margin-right: 6px;
+        }
+
+        /* Status */
+        .status-ok {
+            display: inline-block;
+            padding: 4px 9px;
+            border-radius: 12px;
+
+            background: #e5f6eb;
+            color: #218739;
+
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .status-old {
+            display: inline-block;
+            padding: 4px 9px;
+            border-radius: 12px;
+
+            background: #fff0d6;
+            color: #b56a00;
+
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .status-critical {
+            display: inline-block;
+            padding: 4px 9px;
+            border-radius: 12px;
+
+            background: #fde4e4;
+            color: #c62828;
+
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        /* Summary */
+        .summary {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .summary-box {
+            flex: 1;
+            padding: 12px;
+            border-radius: 10px;
+            background: #f7f9fa;
+            border: 1px solid #e8ecef;
+            text-align: center;
+        }
+
+        .summary-number {
+            font-size: 22px;
+            font-weight: bold;
+            color: #465a65;
+        }
+
+        .summary-label {
+            font-size: 11px;
+            color: #8a969d;
+            margin-top: 2px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1000px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+
+            .brand-card {
+                min-height: 300px;
+            }
+
+            .status-card {
+                min-height: auto;
+            }
+        }
+
+    </style>
+    """, unsafe_allow_html=True)
+
+
+    # ---------------------------------------------------------
+    # Summary
+    # ---------------------------------------------------------
+    total_files = len(df)
+    old_files = df["Status"].ne("").sum()
+    good_files = total_files - old_files
+
+    # ---------------------------------------------------------
+    # Build table
+    # ---------------------------------------------------------
+
+    table_html = """
+    <table class="file-table">
+    <thead>
+    <tr>
+        <th>Folder</th>
+        <th>File Name</th>
+        <th>Date</th>
+        <th>Time</th>
+        <th>Status</th>
+    </tr>
+    </thead>
+    <tbody>
+    """
+
+    for _, row in df.iterrows():
+
+        folder = row["Folder"]
+        file_name = row["File Name"]
+        date = row["Date"]
+        time = row["Time"]
+        status = row["Status"]
+
+        # Status badge
+        if status == "":
+            status_html = '<span class="status-ok">✓ CURRENT</span>'
+
+        elif "225" in status or "174" in status or "144" in status:
+            status_html = f'<span class="status-critical">⚠ {status}</span>'
+
+        else:
+            status_html = f'<span class="status-old">⚠ {status}</span>'
+
+        table_html += f"""
+        <tr>
+            <td>
+                <span class="folder">
+                    <span class="folder-icon">📁</span>
+                    {folder}
+                </span>
+            </td>
+            <td>
+                <span class="file-name">
+                    <span class="file-icon">📄</span>
+                    {file_name}
+                </span>
+            </td>
+            <td>{date}</td>
+            <td>{time}</td>
+            <td>{status_html}</td>
+        </tr>
+        """
+
+    # table_html += """
+    # </tbody>
+    # </table>
+    # """
+
+    # ---------------------------------------------------------
+    # PAGE
+    # ---------------------------------------------------------
+
+    today = datetime.now().strftime("%A, %B %d, %Y")
+
+    st.markdown(f"""
+
+    <div class="dashboard">
+
+        <!-- LEFT -->
+        <div class="brand-card">
+
+            <!-- Replace with your actual logo -->
+            <div style="
+                font-family:Arial;
+                font-size:70px;
+                font-weight:bold;
+                color:#eab308;
+                letter-spacing:-5px;
+            ">
+                SC<span style="color:#16b8d4;">DAT</span>
+            </div>
+
+            <div class="brand-title">
+                Data Management Dashboard
+            </div>
+
+            <div class="brand-subtitle">
+                Inventory • Sales • Cargo Control
+            </div>
+
+        </div>
+
+
+        <!-- RIGHT -->
+        <div class="status-card">
+
+            <div class="status-header">
+
+                <div class="status-title">
+                    📊 Data File Status
+                </div>
+
+                <div class="status-date">
+                    📅 {today}
+                </div>
+            </div>
+            <div class="summary">
+
+                <div class="summary-box">
+                    <div class="summary-number">
+                        {total_files}
+                    </div>
+                    <div class="summary-label">
+                        TOTAL FILES
+                    </div>
+                </div>
+                <div class="summary-box">
+                    <div class="summary-number">
+                        {good_files}
+                    </div>
+                    <div class="summary-label">
+                        CURRENT
+                    </div>
+                </div>
+                <div class="summary-box">
+                    <div class="summary-number">
+                        {old_files}
+                    </div>
+                    <div class="summary-label">
+                        NEED ATTENTION
+                    </div>
+                </div>
+            </div>
+            {table_html}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    return
 
 
 def container_dashboard(datafile_location):

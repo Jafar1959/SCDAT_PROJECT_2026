@@ -1,6 +1,6 @@
 import pandas as pd
 import streamlit as st
-from st_aggrid import GridOptionsBuilder, AgGrid
+from st_aggrid import AgGrid
 from datetime import date, timedelta
 from pathlib import Path, PureWindowsPath    # << for Window & Mac OS path-slash '\' or '/'
 
