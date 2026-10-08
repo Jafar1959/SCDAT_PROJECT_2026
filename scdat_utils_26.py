@@ -12,6 +12,7 @@ import re
 from calendar import month_abbr
 from calendar import month_name
 from calendar import monthrange
+from st_aggrid import GridOptionsBuilder, AgGrid  # , DataReturnMode
 
 @lru_cache(maxsize=1)
 def _load_color_map():
@@ -146,6 +147,85 @@ def sub_headers(items, height=40, font_size=16, border_radius=12, bg_color="#006
         )
     st.write("")
     return
+
+def log_data_in_file(datafile_location, log_data, file_name):
+    txt1 = 'DATA LOG'
+
+    file_path = Path(datafile_location + file_name)      # read monthly sales file
+
+    today = pd.Timestamp.today().normalize()
+
+    new_data = log_data
+
+    if file_path.exists():
+        # st.write("YES EXISTS")
+
+        df_existing = pd.read_excel(file_path, sheet_name='Sheet1')
+
+        if "DATE" in df_existing.columns:
+
+            df_existing["DATE"] = pd.to_datetime(
+                df_existing["DATE"],
+                errors="coerce"
+            ).dt.normalize()
+
+            # Check if today's data was already added
+            if today in df_existing["DATE"].values:
+                txt2 = txt1 + " | Today's data already exists. Nothing added"
+                st.markdown(
+                    f'<p style="font-family: Book Antiqua; color: {color_hex(306)}; text-align:left; font-size: 16px ;border-radius:1%;'
+                    f' line-height:0em; margin-top:5px"> {txt2} </p>', unsafe_allow_html=True)
+
+            else:
+                df_final = pd.concat(
+                    [df_existing, new_data],
+                    ignore_index=True
+                )
+
+                df_final.to_excel(
+                    file_path,
+                    index=False
+                )
+
+                txt3 = txt1 + " | Today's data appended."
+                st.markdown(
+                    f'<p style="font-family: Book Antiqua; color: {color_hex(306)}; text-align:left; font-size: 16px ;border-radius:1%;'
+                    f' line-height:0em; margin-top:5px"> {txt3} </p>', unsafe_allow_html=True)
+
+        else:
+            # Date column doesn't exist
+            df_final = pd.concat(
+                [df_existing, new_data],
+                ignore_index=True
+            )
+
+            df_final.to_excel(
+                file_path,
+                index=False
+            )
+
+            txt4 = txt1 + " | Data appended."
+            st.markdown(
+                f'<p style="font-family: Book Antiqua; color: {color_hex(306)}; text-align:left; font-size: 16px ;border-radius:1%;'
+                f' line-height:0em; margin-top:5px"> {txt4} </p>', unsafe_allow_html=True)
+
+    else:
+        # Excel file doesn't exist
+        new_data.to_excel(
+            file_path,
+            index=False
+        )
+
+        st.write("Excel file created.")
+
+    df_log = pd.read_excel(file_path, sheet_name='Sheet1')
+    df_log['DATE'] = df_log['DATE'].dt.strftime('%Y-%m-%d')  # convert str to date format
+    df_log = df_log.sort_values('DATE', ascending=False)
+    AgGrid(df_log)
+    download_csv(df_log, 'Download Log File')
+
+    return
+
 
 # _______________ Function not Optimized (OLD) __________________________________
 def get_month_and_year_OLD(forecast_month):

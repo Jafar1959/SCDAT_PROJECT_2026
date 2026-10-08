@@ -4,13 +4,13 @@ from datetime import timedelta
 from st_aggrid import GridOptionsBuilder, AgGrid  # , DataReturnMode
 from st_aggrid import JsCode
 import html as html_lib
-import gdown
-from pathlib import Path
+from pathlib import Path, PureWindowsPath    # for Window & Mac OS path-slash '\' or '/'
+
 
 import scdat_utils_26 as utils
 
 def display_my_attendance(datafile_location):
-    file_path = datafile_location + "Attendance\My_Attendance.csv"
+    file_path = Path(PureWindowsPath(datafile_location + "Attendance\My_Attendance.csv"))
 
     df = pd.read_csv(file_path)
 
@@ -23,11 +23,12 @@ def display_my_attendance(datafile_location):
 
     # ____________________ Add Date Selection ____________
     max_date = df['Date'].max()
-    min_date = max_date - pd.Timedelta(days=15)
+    # min_date = max_date - pd.Timedelta(days=31)
+    min_date = df['Date'].min() + pd.Timedelta(days=15)
 
     start_date = st.sidebar.date_input(
         "Start Date",
-        value=min_date,
+        value=max_date - pd.Timedelta(days=16),
         min_value=min_date,
         max_value=max_date
     )
@@ -342,7 +343,7 @@ def display_headers(result, start_date, end_date):
                     color: #A8440A;
                     font-weight: 600;
                 ">
-                    ☕ &nbsp; Break Hours
+                    🎂 &nbsp; Break Hours
                 </div>
                 <div style="
                     font-size: 32px;

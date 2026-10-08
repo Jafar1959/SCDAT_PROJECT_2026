@@ -8,32 +8,17 @@ import glob
 
 import datetime
 from datetime import datetime   #, timedelta
-from time import strftime
-import numpy as np
-# from time import sleep
 
-import openpyxl
-# from openpyxl.styles import Font
-# from openpyxl.styles import Alignment
-
-import os
 import plotly.graph_objects as go
-import plotly.express as px
+
 
 from st_aggrid import GridOptionsBuilder, AgGrid, JsCode, GridUpdateMode    #, DataReturnMode
-
-from screeninfo import get_monitors
 
 from pathlib import Path, PureWindowsPath    # for Window & Mac OS path-slash '\' or '/'
 
 import calendar
-# from calendar import monthrange
 
-import math
-
-# import tensorflow as tf
 # ============== my modules ============================
-# from scdat_colors_26 import color_hex
 import scdat_utils_26 as utils
 from scdat_utils_26 import color_hex
 
@@ -257,7 +242,7 @@ def holtwinter_forecast(datafile_location, suppliers):
     return df_2y, df_hw
 
 
-def sales_forecast(datafile_location, suppliers):
+def sales_forecast_OLD(datafile_location, suppliers):
 
     suppliers.extend(["Kangde Silicone", "LB Plast"])
 
@@ -579,5 +564,352 @@ def sales_forecast(datafile_location, suppliers):
 
     with col3:
         utils.download_csv(df_6m, "Download J-S Forecast")
+
+    return
+
+
+def sales_forecast(datafile_location, suppliers):
+
+    suppliers.extend(["Kangde Silicone", "LB Plast"])
+
+    df_2y = two_years_sales(datafile_location, suppliers)
+
+    df_2y["Month"] = pd.to_datetime(df_2y["Month"])
+
+    df = df_2y.pivot_table(
+        index=["SKU", "SUPPLIER"],
+        columns=df_2y["Month"].dt.strftime("%Y-%m"),
+        values="TOTAL",
+        aggfunc="sum"
+    ).reset_index()
+
+    df.columns.name = None
+
+
+    # drop holt-winter column
+    # df_6m = df_hw.drop('Holt-Winter', axis=1)
+
+    month_name = datetime.now().strftime("%B")
+
+    # __________ Create Check Box ______________________
+    st.markdown("""
+    <style>
+    /* Checkbox label */
+    div[data-testid="stCheckbox"] label p {
+        font-size: 13px;
+        color: #FFFFFF;
+        font-weight: normal;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    choice = st.sidebar.checkbox('Include ' +  month_name + ' Projected Sales')
+
+    # _______________ Remove Current Month Data __________________________
+    df_current_month = df.iloc[:, [0, 1, -1]]
+
+    # _______________ Get Last 6-Months Data after Removing Current Month Data __________________________
+    df = df.iloc[:, :-1]
+    df_6m = pd.concat([df.iloc[:, :2], df.iloc[:, -6:]], axis=1)
+
+    # st.write(df_6m)
+    # utils.download_csv(df, "Download")
+    # st.stop()
+
+    if choice:
+        # _____________ Get current month projected sales data ________________________
+
+        # Current date
+        today = datetime.today()
+
+        # Current day of the month
+        current_day = today.day
+
+        # Total days in the current month
+        total_days = calendar.monthrange(today.year, today.month)[1]
+
+        cols = df_current_month.columns
+
+        # st.write(df_current_month)
+
+        # ______________ Get Current Month Projected Sales _________________________
+        df_current_month[cols[2]] = (df_current_month[cols[2]] * total_days/(current_day-1)).round(0)
+
+        # st.write(df_6m)
+
+        df_6m = df_6m.drop(df_6m.columns[2], axis=1)
+
+        # st.write(df_6m)
+
+        # st.write(df_current_month)
+        # st.stop()
+
+        df_current_month = df_current_month.rename(columns={cols[2]: str(cols[2]) + ' [Projected]' })
+        df_current_month = df_current_month.drop(columns="SUPPLIER")
+
+        df_6m = pd.merge(df_6m, df_current_month, on=["SKU"], how='outer')
+
+    # calculate average
+    cols = df_6m.columns[2:8]
+    df_6m['AVERAGE'] = df_6m[cols].mean(axis=1).round(0)
+
+    # calculate average of top-three months
+    df_6m['TOP3_AVG'] = (
+        df_6m.iloc[:, 2:8]
+        .apply(lambda row: row.nlargest(3).mean(), axis=1)
+    )
+
+    # calculate average of last-three months
+    df_6m['LAST3_AVG'] = df_6m.iloc[:, 5:8].mean(axis=1)
+
+    # st.write(df_6m)
+    # st.stop()
+
+    # weighted average 40% - 60%
+    top3 = 0.45
+    last3 = 0.55
+
+    df_6m['FORECAST'] = (df_6m['TOP3_AVG'] * top3 + df_6m['LAST3_AVG'] * last3).round(0)
+
+    # if FORECAST < AVERAGE then FORECAST = AVERAGE & if FORECAST <=0 then FORECAST = 1
+    df_6m['FORECAST'] = (
+        df_6m['FORECAST']
+        .clip(lower=1)
+        .combine(df_6m['AVERAGE'], max)
+    )
+
+    # merge with Holt-Winter
+    # df_hw = df_hw[['SKU', 'Holt-Winter']]
+    # df_show = pd.merge(df_6m, df_hw, on=["SKU"], how='outer')
+
+    # _____________ Get Supplier Name ________________
+    supplier = df_6m.loc[0,'SUPPLIER']
+
+    # ______________ Remove Unwanted Columns ___________________
+    df_show = df_6m.drop(['SUPPLIER', 'TOP3_AVG', 'LAST3_AVG'], axis=1)
+
+    # st.write(df_show)
+    # st.stop()
+
+
+
+    df_show = df_show.rename(columns={'Holt-Winter': 'HOLT-WINTER'})
+
+    gb = GridOptionsBuilder.from_dataframe(df_show)
+
+    # for alternative row color _____________
+    gb.configure_grid_options(
+        getRowStyle=JsCode("""
+        function(params) {
+            if (params.node.rowIndex % 2 === 0) {
+                return {
+                    'backgroundColor': '#FFFFFF'
+                };
+            } else {
+                return {
+                    'backgroundColor': '#E8E8E8'
+                };
+            }
+        }
+        """)
+    )
+
+    # define columns header class ___________________________
+    gb.configure_column(df_show.columns[0], headerClass="sku-header")
+    gb.configure_column(df_show.columns[1], headerClass="month-header")
+    gb.configure_column(df_show.columns[2], headerClass="month-header")
+    gb.configure_column(df_show.columns[3], headerClass="month-header")
+    gb.configure_column(df_show.columns[4], headerClass="month-header")
+    gb.configure_column(df_show.columns[5], headerClass="month-header")
+    gb.configure_column(df_show.columns[6], headerClass="month-header")
+    gb.configure_column("FORECAST", headerClass="forecast-header")
+    # gb.configure_column("HOLT-WINTER", headerClass="hw-header")
+    gb.configure_column("AVERAGE", headerClass="average-header")
+
+    # set AgGrid header font & background colors_____________
+    custom_css = {
+        ".sku-header": {
+            "background-color": "#B2DFEE",
+            "color": "black"
+        },
+
+        ".month-header": {
+            "background-color": "#CFCFCF",
+            "color": "black"
+        },
+
+        ".forecast-header": {
+            "background-color": "#FFE7BA",
+            "color": "black"
+        },
+        ".hw-header": {
+            "background-color": "#F0FFF0",
+            "color": "black"
+        },
+        ".average-header": {
+            "background-color": "#B2DFEE",
+            "color": "black"
+        },
+
+    }
+
+    utils.show_header(supplier.upper() + " SALES FORECAST")
+
+    # create summary file for sub-header table ________________________________________
+    cols = df_show.columns
+    df_rva = df_show[df_show['SKU'].str.startswith('RVA', na=False)]    # accessories
+    df_rvf = df_show[df_show['SKU'].str.startswith('RVF', na=False)]    # faucets
+    df_rvf_parts = df_show[df_show['SKU'].str.startswith('RVP', na=False)]    # faucets
+    df_tub = df_show[df_show['SKU'].str.startswith('RVB6', na=False)]   # bathtubs
+
+    prefixes = ('RVA', 'RBX', 'RDM', 'RVP', 'RVF', 'RVB6')  # accessories, boxes, dummy faucets, faucet parts, faucet, tub
+    df_sink = utils.exclude_sku_prefixes(df_show, prefixes)
+
+    all_txt = ['Accessories', 'Sink', 'Faucet', 'Faucet Parts', 'Bathtub']
+    all_data = [df_rva, df_sink, df_rvf, df_rvf_parts, df_tub]
+
+    # define lists ___________
+    items = []
+    count = []
+    col1 = []
+    col2 = []
+    col3 = []
+    col4 = []
+    col5 = []
+    col6 = []
+    col7 = []
+    col8 = []
+    # col9 = []
+
+    for i in range(0,5):
+
+        # get appropriate text and datafile ___________
+        txt = all_txt[i]
+        data = all_data[i]
+
+        # calculate column totals ______________________
+        total_sku = int(data['SKU'].count())
+        total_col1 = int(data[cols[1]].sum())
+        total_col2 = int(data[cols[2]].sum())
+        total_col3 = int(data[cols[3]].sum())
+        total_col4 = int(data[cols[4]].sum())
+        total_col5 = int(data[cols[5]].sum())
+        total_col6 = int(data[cols[6]].sum())
+        total_col7 = int(data[cols[7]].sum())
+        total_col8 = int(data[cols[8]].sum())
+        # total_col9 = int(data[cols[9]].sum())
+
+        # append to list ____________________
+        items.append(txt)
+        count.append(total_sku)
+        col1.append(total_col1)
+        col2.append(total_col2)
+        col3.append(total_col3)
+        col4.append(total_col4)
+        col5.append(total_col5)
+        col6.append(total_col6)
+        col7.append(total_col7)
+        col8.append(total_col8)
+        # col9.append(total_col9)
+
+    # create summary dataframe __________________
+    df_sub = pd.DataFrame({
+            'ITEMS': items,
+            'COUNT': count,
+            cols[1]: col1,
+            cols[2]: col2,
+            cols[3]: col3,
+            cols[4]: col4,
+            cols[5]: col5,
+            cols[6]: col6,
+            cols[7]: col7,
+            cols[8]: col8,
+            # cols[9]: col9,
+
+            })
+
+    # filter and sort dataframe __________
+    df_sub = (
+        df_sub.loc[df_sub['COUNT'].ne(0)]
+        .sort_values('ITEMS')
+    )
+
+    # create plotly fig from summary dataframe _____________
+    fig = sub_header_table(df_sub)
+
+    col1, col2 = st.columns([7, 0.2])
+
+    # show = df_sink
+    # txt = 'Sink'
+    #
+    #
+    # total_sku = show['SKU'].count()
+    # total_col1 = int(show[cols[1]].sum())
+    # total_col2 = int(show[cols[2]].sum())
+    # total_col3 = int(show[cols[3]].sum())
+    # total_col4 = int(show[cols[4]].sum())
+    # total_col5 = int(show[cols[5]].sum())
+    # total_col6 = int(show[cols[6]].sum())
+    # total_avg = int(show['AVERAGE'].sum())
+    # total_forecast = int(show['FORECAST'].sum())
+    # total_holtwinter = int(show['HOLT-WINTER'].sum())
+
+
+    #with col1:
+        # utils.sub_headers([
+        #     {"text": txt, "value": total_sku , "color": "#FFFFFF", "bg_color":"#8B2252"},
+        #     {"text": cols[1], "value": total_col1, "color": "#FFFFFF"},
+        #     {"text": cols[2], "value": total_col2, "color": "#FFFFFF"},
+        #     {"text": cols[3], "value": total_col3, "color": "#FFFFFF"},
+        #     {"text": cols[4], "value": total_col4, "color": "#FFFFFF"},
+        #     {"text": cols[5], "value": total_col5, "color": "#FFFFFF"},
+        #     {"text": cols[6], "value": total_col6, "color": "#FFFFFF"},
+        #     {"text": "AVERAGE", "value": total_avg, "color": "#FFFFFF", "bg_color":"#ED7D31"},
+        #     {"text": "FORECAST", "value": total_forecast, "color": "#FFFFFF", "bg_color":"#4F81BD"},
+        #     {"text": "H.WINTER", "value": total_holtwinter, "color": "#FFFFFF", "bg_color": "#70AD47"},
+        # ])
+
+    with col1:
+        st.plotly_chart(fig, width='stretch')
+
+        height = len(df_show)*35
+        if height > 600:
+            height=600
+        AgGrid(df_show, gridOptions=gb.build(), custom_css=custom_css, height=height, fit_columns_on_grid_load=True, allow_unsafe_jscode=True)
+
+    st.sidebar.markdown(
+        f'<p style="font-family: Book Antiqua; color: {color_hex(13)}; text-align:center; font-size: 18px ;border-radius:1%;'
+        f' line-height:0em; margin-top:-10px"> {"_________________________"} </p>',
+        unsafe_allow_html=True)
+
+    txt1 = 'TOP3_AVG = ' + str(top3)
+    st.sidebar.markdown(
+        f'<p style="font-family: Book Antiqua; color: {color_hex(13)}; text-align:left; font-size: 12px ;border-radius:1%;'
+        f' line-height:0em; margin-top:-5px"> {txt1} </p>',
+        unsafe_allow_html=True)
+
+    txt2 = 'LAST3_AVG = ' + str(last3)
+    st.sidebar.markdown(
+        f'<p style="font-family: Book Antiqua; color: {color_hex(13)}; text-align:left; font-size: 12px ;border-radius:1%;'
+        f' line-height:0em; margin-top:-1px"> {txt2} </p>',
+        unsafe_allow_html=True)
+
+    st.sidebar.markdown(
+        f'<p style="font-family: Book Antiqua; color: {color_hex(13)}; text-align:center; font-size: 18px ;border-radius:1%;'
+        f' line-height:0em; margin-top:-10px"> {"_________________________"} </p>',
+        unsafe_allow_html=True)
+
+    # st.sidebar.write('TOP3_AVG = ' + str(top3))
+    # st.sidebar.write('LAST3_AVG = ' + str(last3))
+
+    # display download links side-by-side ________________
+    col1, col2, col3 = st.columns([1,1,1])
+    with col1:
+        utils.download_csv(df_show, "Download Forecast")
+    # with col2:
+    #     utils.download_csv(df_hw, "Download Holt-Winter Forecast")
+    #
+    # with col3:
+    #     utils.download_csv(df_6m, "Download J-S Forecast")
 
     return

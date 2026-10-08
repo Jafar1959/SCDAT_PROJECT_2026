@@ -879,7 +879,127 @@ def current_month_sales_graph(datafile_location, forecast_month, suppliers):
         utils.download_csv(df_all, 'Download df_all')
         utils.download_csv(df1, 'Download Sales')
         utils.download_csv(df2, 'Download Forecast')
-      
+
+    # _______ Create Button and Log Data ____________________________
+    st.markdown("""
+    <style>
+    div.stButton > button {
+        background-color: #53868B;
+        width: 205px;
+        height: 45px;
+        padding: 5px 15px;
+        color: white;
+        font-size: 18px;
+        font-weight: bold;
+        border-radius: 8px;
+        border: 2px solid white;
+    }
+
+    div.stButton > button:hover {
+        background-color: #458B74;
+        color: white;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    if st.sidebar.button("LOG SALES DATA"):
+
+        today = date.today()
+        day = today.strftime("%A")
+
+        log_data = pd.DataFrame({
+            'DATE': [today],
+            'DAY': [day],
+            'SINK_SALE': [total_sink],
+            'BATHTUB_SALE': [total_bathtub],
+            'FAUCET_SALE': [total_faucet],
+            'ACCESSORIES_SALE': [total_accessories],
+            'SINK_PROJECTION': [int(sink_projected)],
+            'BATHTUB_PROJECTION': [int(bathtub_projected)],
+            'FAUCET_PROJECTION': [int(faucet_projected)],
+            'ACCESSORIES_PROJECTION': [int(accessories_projected)],
+        })
+
+        utils.log_data_in_file(datafile_location, log_data, 'Sales\\Monthly_Sales\\DAILY SALES LOG.xlsx')
+
+    return
+
+def log_data_in_file_OLD(datafile_location, log_data, file_name):
+    txt1 = 'DATA LOG'
+
+    file_path = Path(datafile_location + file_name)      # read monthly sales file
+
+    today = pd.Timestamp.today().normalize()
+
+    new_data = log_data
+
+    if file_path.exists():
+        # st.write("YES EXISTS")
+
+        df_existing = pd.read_excel(file_path, sheet_name='Sheet1')
+
+        if "DATE" in df_existing.columns:
+
+            df_existing["DATE"] = pd.to_datetime(
+                df_existing["DATE"],
+                errors="coerce"
+            ).dt.normalize()
+
+            # Check if today's data was already added
+            if today in df_existing["DATE"].values:
+                txt2 = txt1 + " | Today's data already exists. Nothing added"
+                st.markdown(
+                    f'<p style="font-family: Book Antiqua; color: {color_hex(306)}; text-align:left; font-size: 16px ;border-radius:1%;'
+                    f' line-height:0em; margin-top:5px"> {txt2} </p>', unsafe_allow_html=True)
+
+            else:
+                df_final = pd.concat(
+                    [df_existing, new_data],
+                    ignore_index=True
+                )
+
+                df_final.to_excel(
+                    file_path,
+                    index=False
+                )
+
+                txt3 = txt1 + " | Today's data appended."
+                st.markdown(
+                    f'<p style="font-family: Book Antiqua; color: {color_hex(306)}; text-align:left; font-size: 16px ;border-radius:1%;'
+                    f' line-height:0em; margin-top:5px"> {txt3} </p>', unsafe_allow_html=True)
+
+        else:
+            # Date column doesn't exist
+            df_final = pd.concat(
+                [df_existing, new_data],
+                ignore_index=True
+            )
+
+            df_final.to_excel(
+                file_path,
+                index=False
+            )
+
+            txt4 = txt1 + " | Data appended."
+            st.markdown(
+                f'<p style="font-family: Book Antiqua; color: {color_hex(306)}; text-align:left; font-size: 16px ;border-radius:1%;'
+                f' line-height:0em; margin-top:5px"> {txt4} </p>', unsafe_allow_html=True)
+
+    else:
+        # Excel file doesn't exist
+        new_data.to_excel(
+            file_path,
+            index=False
+        )
+
+        st.write("Excel file created.")
+
+    df_log = pd.read_excel(file_path, sheet_name='Sheet1')
+    df_log['DATE'] = df_log['DATE'].dt.strftime('%Y-%m-%d')  # convert str to date format
+    df_log = df_log.sort_values('DATE', ascending=False)
+    AgGrid(df_log)
+    utils.download_csv(df_log, 'Download Log File')
+
     return
 
 def display_sales_report_monthly(datafile_location):

@@ -5,6 +5,8 @@ import time
 import plotly.graph_objects as go
 import calendar
 from datetime import datetime
+from datetime import date
+
 from plotly.subplots import make_subplots
 import statistics
 
@@ -498,20 +500,276 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
     col1, col2 = st.columns([2.1, 0.01])
     with col1:
         st.plotly_chart(fig, use_container_width=True)
-        utils.download_csv(df_wh1, 'Download WH1')
-        utils.download_csv(df_wh2, 'Download WH2')
-        utils.download_csv(df_wh3, 'Download WH3')
-        utils.download_csv(df_wh4, 'Download WH4')
-        utils.download_csv(df_fba, 'Download FBA')
-        utils.download_csv(values[9], 'Download LOWES')
-        utils.download_csv(values[11], 'Download FAUCETS')
-        utils.download_csv(values[12], 'Download BATHTUBS')
 
-        utils.download_csv(df_l_container, 'Download L-CONTAINER')
-        utils.download_csv(df_accessories, 'Download PARTS')
-        utils.download_csv(df_refurb, 'Download REFURBISHED')
-        utils.download_csv(df_box, 'Download PACKING BOX')
+    # _______________ Show Download Links _____________
+    downloads = [
+        (df_wh1, "Download WH1"),
+        (df_wh2, "Download WH2"),
+        (df_wh3, "Download WH3"),
+        (df_wh4, 'Download WH4'),
+        (df_fba, 'Download FBA'),
+        (values[9], 'Download LOWES'),
+        (values[11], 'Download FAUCETS'),
+        (values[12], 'Download BATHTUBS'),
+    ]
 
+    cols = st.columns(len(downloads))
+
+    for col, (df, label) in zip(cols, downloads):
+        with col:
+            utils.download_csv(df, label)
+
+    downloads = [
+        (df_l_container, 'Download L-CONTAINER'),
+        (df_accessories, 'Download PARTS'),
+        (df_refurb, 'Download REFURBISHED'),
+        (df_box, 'Download PACKING BOX')
+    ]
+
+    cols = st.columns(len(downloads))
+
+    for col, (df, label) in zip(cols, downloads):
+        with col:
+            utils.download_csv(df, label)
+
+    # col1, col2, col3 = st.columns([1, 1, 1])
+    #
+    # with col1:
+    #     utils.download_csv(df_wh1, 'Download WH1')
+    # with col2:
+    #     utils.download_csv(df_wh2, 'Download WH2')
+    # with col3:
+    #     utils.download_csv(df_wh3, 'Download WH3')
+        # utils.download_csv(df_wh4, 'Download WH4')
+        # utils.download_csv(df_fba, 'Download FBA')
+        # utils.download_csv(values[9], 'Download LOWES')
+        # utils.download_csv(values[11], 'Download FAUCETS')
+        # utils.download_csv(values[12], 'Download BATHTUBS')
+        #
+        # utils.download_csv(df_l_container, 'Download L-CONTAINER')
+        # utils.download_csv(df_accessories, 'Download PARTS')
+        # utils.download_csv(df_refurb, 'Download REFURBISHED')
+        # utils.download_csv(df_box, 'Download PACKING BOX')
+
+    # _______ Create Button and Log Data ____________________________
+    st.markdown("""
+       <style>
+       div.stButton > button {
+           background-color: #53868B;
+           width: 205px;
+           height: 45px;
+           padding: 5px 15px;
+           color: white;
+           font-size: 18px;
+           font-weight: bold;
+           border-radius: 8px;
+           border: 2px solid white;
+       }
+
+       div.stButton > button:hover {
+           background-color: #458B74;
+           color: white;
+       }
+       </style>
+       """, unsafe_allow_html=True)
+
+    # _________ Show Inventory Log Graph _____________________
+    log_data_graph(datafile_location + 'Inventory\\DAILY INVENTORY LOG.xlsx')
+
+    if st.sidebar.button("LOG INVENTORY DATA"):
+        log_inventory(datafile_location)
+
+    return
+
+
+def log_inventory(datafile_location):
+    df = data.inventory_df(datafile_location)[['SKU', 'SUPPLIER', 'Existing Qty']]
+    df = df.rename(columns={'Existing Qty': 'QTY'})
+
+    # ______________ Get Sink & Faucet Data ____________________
+    prefixes = ('RVA', 'RBX', 'RDM', 'RVP', 'RVB6')  # Accessories, Boxes, Dummy faucets/Display, Faucet parts, Bathtub
+    df_sink = utils.exclude_sku_prefixes(df, prefixes)
+    df_sink = df_sink.groupby('SUPPLIER')['QTY'].sum().to_frame().reset_index()
+    df_sink = df_sink.set_index('SUPPLIER').T
+    df_sink.columns.name = None
+
+    # ______________ Add Nicos Bathtub _______________________
+    df_nicos_tub = df[
+        (df["SUPPLIER"] == "Nicos") &
+        (df["SKU"].str.startswith("RVB6", na=False))
+        ]
+    total_nicos_tub = df_nicos_tub['QTY'].sum()
+
+    nicos_column_number = df_sink.columns.get_loc("Nicos")
+    df_sink.insert(nicos_column_number + 1, "Nicos-Tub", total_nicos_tub)
+
+    # ______________ Add Wisdom Bathtub _______________________
+    df_wisdom_tub = df[
+        (df["SUPPLIER"] == "Wisdom") &
+        (df["SKU"].str.startswith("RVB6", na=False))
+        ]
+    total_wisdom_tub = df_wisdom_tub['QTY'].sum()
+
+    wisdom_column_number = df_sink.columns.get_loc("Wisdom")
+    df_sink.insert(wisdom_column_number + 1, "Wisdom-Tub", total_wisdom_tub)
+
+    # ____________ Add Accessories Data ______________________________
+    df_accessories = df.loc[lambda row: row['SKU'].str.startswith('RVA')]
+    df_accessories = df_accessories.groupby('SUPPLIER')['QTY'].sum().to_frame().reset_index()
+    df_accessories = df_accessories.set_index('SUPPLIER').T
+    df_accessories.columns.name = None
+    df_accessories.columns = df_accessories.columns.astype(str) + '_Acc'
+
+    log_data = pd.concat([df_sink, df_accessories], axis=1)
+
+    # _____________ Add FBA Data _________________________
+    df_fba = data.fba_inventory_df(datafile_location)[['SKU', 'TOTAL FBA STOCK']]
+    prefixes = ('RVA', 'RVF')  # accessories, faucets
+    df_fba_sink = utils.exclude_sku_prefixes(df_fba, prefixes)
+    df_fba_faucet = df_fba.loc[lambda row: row['SKU'].str.startswith('RVF')]
+    df_fba_accessories = df_fba.loc[lambda row: row['SKU'].str.startswith('RVA')]
+
+    log_data['FBA_Sink'] = df_fba_sink['TOTAL FBA STOCK'].sum()
+    log_data['FBA_Faucet'] = df_fba_faucet['TOTAL FBA STOCK'].sum()
+    log_data['FBA_Acc'] = df_fba_accessories['TOTAL FBA STOCK'].sum()
+
+    # ____________ Add Lowes Models _____________________________
+    lowes_sink = ['RVH180051LM', 'RVH183001LM', 'RVH185841LM', 'RVH165301BL', 'RVG11080BK', 'RVG123061BK']      # <<<< Lowes List
+
+    df_lowes_sink = df[df['SKU'].isin(lowes_sink)]
+    log_data['Lowes_Sink'] = df_lowes_sink['QTY'].sum()
+
+    lowes_acc = ['RVA9001LM']
+    df_lowes_acc = df[df['SKU'].isin(lowes_acc)]
+    log_data['Lowes_Acc'] = df_lowes_acc['QTY'].sum()
+
+    # ____________ Add Incoming Sink, Tub & Faucet Qty________________
+    df_incoming, *_ = data.container_df(datafile_location)
+    df_incoming = df_incoming[['SKU', 'QTY']]
+
+    prefixes = ('RVA', 'RBX', 'RDM', 'RVF', 'RVP', 'RVB6')  # Accessories, Boxes, Dummy faucets/Display, Faucet, Faucet parts, Bathtub
+    df_incoming_sink = utils.exclude_sku_prefixes(df_incoming, prefixes)
+    df_incoming_sink = df_incoming_sink.groupby('SKU')['QTY'].sum().to_frame().reset_index()
+
+    df_incoming_tub = df_incoming.loc[lambda row: row['SKU'].str.startswith('RVB6')]
+    df_incoming_tub = df_incoming_tub.groupby('SKU')['QTY'].sum().to_frame().reset_index()
+
+    df_incoming_faucet = df_incoming.loc[lambda row: row['SKU'].str.startswith('RVF')]
+    df_incoming_faucet = df_incoming_faucet.groupby('SKU')['QTY'].sum().to_frame().reset_index()
+
+    df_incoming_acc = df_incoming.loc[lambda row: row['SKU'].str.startswith('RVA')]
+    df_incoming_acc = df_incoming_acc.groupby('SKU')['QTY'].sum().to_frame().reset_index()
+
+    log_data['Incoming_Sink'] = df_incoming_sink['QTY'].sum()
+    log_data['Incoming_Tub'] = df_incoming_tub['QTY'].sum()
+    log_data['Incoming_Faucet'] = df_incoming_faucet['QTY'].sum()
+    log_data['Incoming_Acc'] = df_incoming_acc['QTY'].sum()
+
+    # st.write(log_data)
+    # st.stop()
+
+    # ______________ Insert Date, Day & Time _____________________
+    today = date.today()
+    day = today.strftime("%A")
+    current_time = datetime.now().strftime("%I:%M:%S %p")
+
+    log_data.insert(0, "DATE", today)
+    log_data.insert(1, "DAY", day)
+    log_data.insert(2, "TIME", current_time)
+
+    utils.log_data_in_file(datafile_location, log_data, 'Inventory\\DAILY INVENTORY LOG.xlsx')
+
+    return log_data
+
+
+def log_data_graph(file_path):
+
+    df = pd.read_excel(file_path, sheet_name='Sheet1')
+    df['DATE'] = df['DATE'].dt.strftime('%Y-%m-%d')  # convert str to date format
+    df = df.sort_values('DATE', ascending=False)
+
+    # -----------------------------
+    # Prepare data
+    # -----------------------------
+    df["DATE"] = pd.to_datetime(df["DATE"])
+
+    # Sort by date
+    df = df.sort_values("DATE")
+
+    # Columns available for selection
+    exclude_columns = ["DATE", "DAY", "TIME"]
+    quantity_columns = [col for col in df.columns if col not in exclude_columns]
+
+    # __________ Set Range Filter ___________
+    range = st.sidebar.selectbox(
+        "Log Graph | Select Range",
+        ['Last 30-days', 'Last 60-days', 'Last 180-days', 'Last 365-days']
+    )
+
+    delta = {
+        'Last 30-days': 30,
+        'Last 60-days': 60,
+        'Last 180-days': 180,
+        'Last 365-days': 365
+
+    }.get(range, 30)  # Default = 30 days
+
+    end_date = df["DATE"].max()
+
+    start_date = end_date - pd.Timedelta(days=delta)
+
+    df = df[
+        (df["DATE"] >= start_date) &
+        (df["DATE"] <= end_date)
+        ]
+
+    # -----------------------------
+    # Selection box - Multi-Select
+    # -----------------------------
+    selected_columns = st.sidebar.multiselect(
+        "Log Graph | Select Supplier",
+        options=quantity_columns,
+        default=["Speed Vietnam", "Elleci"]
+    )
+
+    column_name = ", ".join(selected_columns)
+
+    # -----------------------------
+    # Create Plotly graph
+    # -----------------------------
+    fig = go.Figure()
+
+    for col in selected_columns:
+        fig.add_trace(
+            go.Scatter(
+                x=df["DATE"],
+                y=df[col],
+                mode="lines+markers",
+                name=col
+            )
+        )
+
+    # -----------------------------
+    # Format graph
+    # -----------------------------
+    fig.update_layout(
+        title=column_name + " | Inventory History | " + range,
+        xaxis_title="Date",
+        yaxis_title="Quantity",
+        hovermode="x unified",
+        height=600,
+        template="plotly_white",
+        legend_title="Supplier / Category"
+    )
+
+    fig.update_xaxes(
+        tickformat="%m/%d/%Y"
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
     return
 
 

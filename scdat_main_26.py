@@ -32,9 +32,9 @@ import scdat_my_attendance_26 as attendance
 
 
 # ============= my variables =========================
-CURRENT_MONTH = 'Sep'
+CURRENT_MONTH = 'Oct'
 CURRENT_YEAR = '2026'
-FORECAST_MONTH = '09_Sep-2026'
+FORECAST_MONTH = '10_Oct-2026'
 SUPPLIERS = ['ALL',
             'Aquacubic',
             'Bomeijia',
