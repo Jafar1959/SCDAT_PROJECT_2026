@@ -13,6 +13,7 @@ import statistics
 import scdat_data_26 as data
 import scdat_utils_26 as utils
 from scdat_utils_26 import color_hex
+from pathlib import Path, PureWindowsPath    # for Window & Mac OS path-slash '\' or '/'
 
 # from scdat_colors_26 import color_hex
 
@@ -683,7 +684,7 @@ def log_inventory(datafile_location):
 
 
 def log_data_graph(file_path):
-
+    file_path = Path(PureWindowsPath(file_path))
     df = pd.read_excel(file_path, sheet_name='Sheet1')
     df['DATE'] = df['DATE'].dt.strftime('%Y-%m-%d')  # convert str to date format
     df = df.sort_values('DATE', ascending=False)
