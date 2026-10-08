@@ -1,18 +1,17 @@
 import streamlit as st
 import pandas as pd
-from st_aggrid import GridOptionsBuilder
 
 import datetime
 from datetime import datetime, date
 import base64
 
 from functools import lru_cache
-from pathlib import Path
 import re
 from calendar import month_abbr
 from calendar import month_name
 from calendar import monthrange
 from st_aggrid import GridOptionsBuilder, AgGrid  # , DataReturnMode
+from pathlib import Path, PureWindowsPath    # for Window & Mac OS path-slash '\' or '/'
 
 @lru_cache(maxsize=1)
 def _load_color_map():
@@ -151,7 +150,8 @@ def sub_headers(items, height=40, font_size=16, border_radius=12, bg_color="#006
 def log_data_in_file(datafile_location, log_data, file_name):
     txt1 = 'DATA LOG'
 
-    file_path = Path(datafile_location + file_name)      # read monthly sales file
+    # file_path = Path(datafile_location + file_name)      # read monthly sales file
+    file_path = Path(PureWindowsPath(datafile_location + file_name))
 
     today = pd.Timestamp.today().normalize()
 
