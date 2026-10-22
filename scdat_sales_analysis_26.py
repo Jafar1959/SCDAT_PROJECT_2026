@@ -711,19 +711,36 @@ def current_month_sales_graph(datafile_location, forecast_month, suppliers):
     total_acc = df_acc['TOTAL'].sum()
     total_acc_fba = df_acc['FBA QTY'].sum()
 
-
-    # _____________ Remove All Accessories Data ________________________________________
-    # df = df.loc[lambda row: ~ row['SKU'].str.startswith('RVA')]     # remove all accessories
-
-    prefixes = ('RVA', 'RBX', 'RDM', 'RVP')  # accessories, boxes, dummy faucets, faucet parts
-    df = utils.exclude_sku_prefixes(df, prefixes)
+    # _____________ Remove Accessories, Boxes, Dummy faucets, Faucet parts  ____________________
+    prefixes = ('RVA', 'RBX', 'RDM', 'RVP', 'RVB6')
+    df_sink = utils.exclude_sku_prefixes(df, prefixes)
 
     # ______________ Group by Suppliers __________________________________________
-    df = df.groupby(['SUPPLIER'])[['FORECAST', 'TOTAL', 'FBA QTY']].sum().reset_index()  # <<<<<<<<<< change in syntex
+    # df = df.groupby(['SUPPLIER'])[['FORECAST', 'TOTAL', 'FBA QTY']].sum().reset_index()  # <<<<<<<<<< change in syntex
+    df_sink = df_sink.groupby(['SUPPLIER'])[['FORECAST', 'TOTAL', 'FBA QTY']].sum().reset_index()  # <<<<<<<<<< change in syntex
+    df_sink['SUPPLIER'] = df_sink['SUPPLIER'].replace({
+        'NICOS': 'NICOS-SINK',
+        'WISDOM': 'WISDOM-SINK'
+    })
+
+    # _____________ Get Tub data ______________________
+    df_tub = df[
+        df['SUPPLIER'].isin(['NICOS', 'WISDOM']) &
+        df['SKU'].str.startswith('RVB6', na=False)
+        ]
+
+    df_tub = df_tub.groupby(['SUPPLIER'])[['FORECAST', 'TOTAL', 'FBA QTY']].sum().reset_index()
+    df_tub['SUPPLIER'] = df_tub['SUPPLIER'].replace({
+        'NICOS': 'NICOS-TUB',
+        'WISDOM': 'WISDOM-TUB'
+    })
+
+    # ______________ Add Bathtub Data and Sort _______________________
+    df = pd.concat([df_sink, df_tub], ignore_index=True)
+    df = df.sort_values("SUPPLIER", ascending=True)
 
     # ______________ Add Accessories Data at the Bottom _________________________
     df.loc[len(df)] = ["ACCESSORIES", forecast_acc, total_acc, total_acc_fba]      # add all accessories
-
 
     # _____________ Get FBA Sales % ___________________________________________
     df['FBA_PERCENT'] = round(df['FBA QTY'] * 100 / df['FORECAST'], 2)
@@ -830,10 +847,10 @@ def current_month_sales_graph(datafile_location, forecast_month, suppliers):
     else:
         projection_factor = total_days / (now.day - 1)
 
-    sink_projected = total_sink * projection_factor
-    bathtub_projected = total_bathtub * projection_factor
-    faucet_projected = total_faucet * projection_factor
-    accessories_projected = total_accessories * projection_factor
+    sink_projected = int(total_sink * projection_factor)
+    bathtub_projected = int(total_bathtub * projection_factor)
+    faucet_projected = int(total_faucet * projection_factor)
+    accessories_projected = int(total_accessories * projection_factor)
 
     # ______________ Create Annotation Text _____________________________________
     annotation_text = utils.get_todays_date() + " >> "\
@@ -880,7 +897,8 @@ def current_month_sales_graph(datafile_location, forecast_month, suppliers):
         utils.download_csv(df1, 'Download Sales')
         utils.download_csv(df2, 'Download Forecast')
 
-    # _______ Create Button and Log Data ____________________________
+    # _______ Create "LOG SALES DATA" Button and Log Data ____________________________
+    # _____ Format Button ______
     st.markdown("""
     <style>
     div.stButton > button {
@@ -904,101 +922,18 @@ def current_month_sales_graph(datafile_location, forecast_month, suppliers):
 
     if st.sidebar.button("LOG SALES DATA"):
 
-        today = date.today()
-        day = today.strftime("%A")
+        sales_dict = df.set_index('SUPPLIER')['TOTAL SALES'].to_dict()
+        log_data = pd.DataFrame([sales_dict], index=['TOTAL SALES'])
+        log_data.columns.name = 'SUPPLIER'
+        log_data = log_data.reset_index(drop=True)
+        log_data.insert(0, 'DATE', date.today())
+        log_data.insert(1, 'TIME', datetime.now().strftime('%H:%M:%S'))
+        log_data.insert(2, 'DAY', date.today().strftime("%A"))
+        log_data[['TOTAL SINK', 'TOTAL FAUCET', 'TOTAL TUB']] = [total_sink, total_faucet, total_bathtub]
+        log_data[['PROJ_SINK', 'PROJ_FAUCET', 'PROJ_TUB', 'PROJ_ACCESSORIES']] = [sink_projected, faucet_projected, bathtub_projected, accessories_projected]
 
-        log_data = pd.DataFrame({
-            'DATE': [today],
-            'DAY': [day],
-            'SINK_SALE': [total_sink],
-            'BATHTUB_SALE': [total_bathtub],
-            'FAUCET_SALE': [total_faucet],
-            'ACCESSORIES_SALE': [total_accessories],
-            'SINK_PROJECTION': [int(sink_projected)],
-            'BATHTUB_PROJECTION': [int(bathtub_projected)],
-            'FAUCET_PROJECTION': [int(faucet_projected)],
-            'ACCESSORIES_PROJECTION': [int(accessories_projected)],
-        })
-
+        # ______ write data to file ________________
         utils.log_data_in_file(datafile_location, log_data, 'Sales\\Monthly_Sales\\DAILY SALES LOG.xlsx')
-
-    return
-
-def log_data_in_file_OLD(datafile_location, log_data, file_name):
-    txt1 = 'DATA LOG'
-
-    file_path = Path(datafile_location + file_name)      # read monthly sales file
-
-    today = pd.Timestamp.today().normalize()
-
-    new_data = log_data
-
-    if file_path.exists():
-        # st.write("YES EXISTS")
-
-        df_existing = pd.read_excel(file_path, sheet_name='Sheet1')
-
-        if "DATE" in df_existing.columns:
-
-            df_existing["DATE"] = pd.to_datetime(
-                df_existing["DATE"],
-                errors="coerce"
-            ).dt.normalize()
-
-            # Check if today's data was already added
-            if today in df_existing["DATE"].values:
-                txt2 = txt1 + " | Today's data already exists. Nothing added"
-                st.markdown(
-                    f'<p style="font-family: Book Antiqua; color: {color_hex(306)}; text-align:left; font-size: 16px ;border-radius:1%;'
-                    f' line-height:0em; margin-top:5px"> {txt2} </p>', unsafe_allow_html=True)
-
-            else:
-                df_final = pd.concat(
-                    [df_existing, new_data],
-                    ignore_index=True
-                )
-
-                df_final.to_excel(
-                    file_path,
-                    index=False
-                )
-
-                txt3 = txt1 + " | Today's data appended."
-                st.markdown(
-                    f'<p style="font-family: Book Antiqua; color: {color_hex(306)}; text-align:left; font-size: 16px ;border-radius:1%;'
-                    f' line-height:0em; margin-top:5px"> {txt3} </p>', unsafe_allow_html=True)
-
-        else:
-            # Date column doesn't exist
-            df_final = pd.concat(
-                [df_existing, new_data],
-                ignore_index=True
-            )
-
-            df_final.to_excel(
-                file_path,
-                index=False
-            )
-
-            txt4 = txt1 + " | Data appended."
-            st.markdown(
-                f'<p style="font-family: Book Antiqua; color: {color_hex(306)}; text-align:left; font-size: 16px ;border-radius:1%;'
-                f' line-height:0em; margin-top:5px"> {txt4} </p>', unsafe_allow_html=True)
-
-    else:
-        # Excel file doesn't exist
-        new_data.to_excel(
-            file_path,
-            index=False
-        )
-
-        st.write("Excel file created.")
-
-    df_log = pd.read_excel(file_path, sheet_name='Sheet1')
-    df_log['DATE'] = df_log['DATE'].dt.strftime('%Y-%m-%d')  # convert str to date format
-    df_log = df_log.sort_values('DATE', ascending=False)
-    AgGrid(df_log)
-    utils.download_csv(df_log, 'Download Log File')
 
     return
 
@@ -3165,3 +3100,246 @@ def display_top_seller(datafile_location):
         AgGrid(df_model, grid_options, height=400, fit_columns_on_grid_load=True)
 
     return
+
+def display_dealer_wise_quarterly_report(datafile_location):
+
+    # years = ['2026', '2025']
+
+    # current_year = datetime.now().year
+
+
+    # years = [current_year, current_year - 1]
+    # years = list(map(str, years))   # convert the list element to str
+
+    # months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+    # current_year = str(datetime.now().year)
+    # current_month = datetime.now().month
+
+    current_year = date.today().year
+    current_month = datetime.now().month
+
+    years = [current_year - i for i in range(3)]    # create 3 years list, going backward
+
+    months = list(calendar.month_name)[1:]  # create 12 months list
+
+    # _____ create dealer order from sales in USD ____________________
+    file_path = Path(PureWindowsPath(datafile_location + "Sales\\Monthly_Sales\\Dealers_Order.csv"))
+    df_dealer = pd.read_csv(file_path, encoding='latin-1')
+
+    # __________ Change Dealer name 'Cabinets To Go, Megan Collier' > 'Cabinets To Go' __________________
+    df_dealer.loc[df_dealer['Customer'] == 'Cabinets To Go, Megan Collier', 'Customer'] = 'Cabinets To Go'
+
+    # df_dealer = df_dealer.groupby('Customer')['Total'].sum().to_frame().reset_index()
+    # df_dealer = df_dealer.sort_values('Total', ascending=False)
+    # df_dealer.reset_index(drop=True, inplace=True)
+    # df_dealer.index = range(1, df_dealer.shape[0] + 1)
+
+    df_dealer = (
+        df_dealer.groupby('Customer', as_index=False)['Total']
+        .sum()
+        .sort_values('Total', ascending=False)
+        .reset_index(drop=True)
+    )
+
+    df_dealer.index += 1
+
+    df_dealer1 = df_dealer[0:20]  # take top 24 dealers only
+    dealers = df_dealer1['Customer'].to_list()  # make a dealer list
+
+    txt = str(current_year) + " YTD | Dealer Quarterly Sales Summary | " + utils.get_todays_date()
+    utils.show_header(txt)
+
+    mygrid = utils.make_grid(6,4) #(5, 4)  # (rows, cols)
+    col = 0
+    row = 0
+
+    for d in range (0, len(dealers)): # run for all dealers
+
+        for y in range (0, len(years)): # run for all year
+
+            # limit month number for the current year
+            if years[y] == current_year:
+                no_of_months = current_month
+            else:
+                no_of_months = 12
+
+            for m in range(0, no_of_months): # run for all month
+
+                if dealers[d] == 'Amazon':
+                    df = data.amazon_df(datafile_location, months[m], str(years[y]))
+
+                else:
+                    df = data.zen_df(datafile_location, months[m], str(years[y]))
+
+                    df ['DEALER'] = df.apply(lambda x: str(x.iloc[4]).upper(), axis=1) # convert dealer name to upper case
+                    df.replace ('MEGAN COLLIER', 'CABINETS TO GO', inplace=True) # <<<<<<<<<<<<<<<< ============================
+
+                    # st.write(df)
+                    # st.stop()
+
+                    df = df.loc[lambda row: row['DEALER'].str.startswith(dealers[d].upper())] # query with dealer name
+
+
+                month_name = str(months[m])[0:3] + '-' + str(years[y])[2:4] # get month name for column header like Jan-24
+
+                if len(df) > 0:
+                    df1 = df.groupby('SKU')['QTY'].sum().to_frame().reset_index()
+
+                    df1 = df1.rename(columns={'QTY': month_name})
+
+                else:
+                    df = df[['SKU', 'QTY']]
+                    df['QTY'] = 0
+                    df1 = df.rename(columns={'QTY': month_name})
+                    # st.write(df)
+
+                # merge for 12 months
+                if m == 0:
+                    df2 = df1.copy()
+
+                else:
+                    if len(df) > 0:
+                        df2 = pd.merge(df2, df1, on=["SKU"], how='outer')
+                    else:
+                        df2[month_name] = 0
+
+            df2 = df2.fillna(0)
+            # st.write(df2)
+
+            df2 = df2.loc[lambda row: ~ row['SKU'].str.startswith('RVA')] # remove accessories
+
+            # for current year create blank columns for the rest of the months
+            if years[y] == current_year:
+
+                for m2 in range (current_month+1, 13):
+                    short_month_name = utils.get_short_month_name(m2)
+                    df2[short_month_name + '-' + str(current_year)[2:4]] = 0
+
+            # arrange columns in order
+            cols = ['SKU',
+                    str(months[0])[0:3] + '-' + str(years[y])[2:4],
+                    str(months[1])[0:3] + '-' + str(years[y])[2:4],
+                    str(months[2])[0:3] + '-' + str(years[y])[2:4],
+                    str(months[3])[0:3] + '-' + str(years[y])[2:4],
+                    str(months[4])[0:3] + '-' + str(years[y])[2:4],
+                    str(months[5])[0:3] + '-' + str(years[y])[2:4],
+                    str(months[6])[0:3] + '-' + str(years[y])[2:4],
+                    str(months[7])[0:3] + '-' + str(years[y])[2:4],
+                    str(months[8])[0:3] + '-' + str(years[y])[2:4],
+                    str(months[9])[0:3] + '-' + str(years[y])[2:4],
+                    str(months[10])[0:3] + '-' + str(years[y])[2:4],
+                    str(months[11])[0:3] + '-' + str(years[y])[2:4],
+                    ]
+
+            # create Q1 df
+            q1 = 'Q1' + '-' + str(years[y])[2:4]
+            df_q1 = df2[[cols[0], cols[1], cols[2], cols[3]]].copy()
+            df_q1[q1] = df2[cols[1]] + df2[cols[2]] + df2[cols[3]]
+            df_q1 = df_q1[['SKU', q1]]
+
+            # create Q2 df
+            q2 = 'Q2' + '-' + str(years[y])[2:4]
+            df_q2 = df2[[cols[0], cols[4], cols[5], cols[6]]].copy()
+            df_q2[q2] = df2[cols[4]] + df2[cols[5]] + df2[cols[6]]
+            df_q2 = df_q2[['SKU', q2]]
+
+            df_quarter = pd.merge(df_q1, df_q2, on=["SKU"], how='outer')
+
+            # create Q3 df
+            q3 = 'Q3' + '-' + str(years[y])[2:4]
+            df_q3 = df2[[cols[0], cols[7], cols[8], cols[9]]].copy()
+            df_q3[q3] = df2[cols[7]] + df2[cols[8]] + df2[cols[9]]
+            df_q3 = df_q3[['SKU', q3]]
+
+            df_quarter = pd.merge(df_quarter, df_q3, on=["SKU"], how='outer')
+
+            # create Q4 df
+            q4 = 'Q4' + '-' + str(years[y])[2:4]
+            df_q4 = df2[[cols[0], cols[10], cols[11], cols[12]]].copy()
+            df_q4[q4] = df2[cols[10]] + df2[cols[11]] + df2[cols[12]]
+            df_q4 = df_q4[['SKU', q4]]
+
+            df_quarter = pd.merge(df_quarter, df_q4, on=["SKU"], how='outer')
+
+            df_quarter['TOTAL'] = df_quarter[q1] + df_quarter[q2] + df_quarter[q3] + df_quarter[q4]
+            df_quarter = df_quarter.sort_values('SKU', ascending=True)
+
+            q1_sum = df_quarter[q1].sum()
+            q2_sum = df_quarter[q2].sum()
+            q3_sum = df_quarter[q3].sum()
+            q4_sum = df_quarter[q4].sum()
+            total = df_quarter['TOTAL'].sum()
+
+            df_table = pd.DataFrame({'Year': [years[y]],
+                                 'Q1': [q1_sum],
+                                 'Q2': [q2_sum],
+                                 'Q3': [q3_sum],
+                                 'Q4': [q4_sum],
+                                 'Total': [total],
+
+                                 })
+
+            if y == 0:
+                df_table1 = df_table.copy()
+
+            else:
+                df_table1 = pd.concat([df_table1, df_table])
+
+
+            # AgGrid(df_quarter)
+            utils.download_csv(df_quarter, '4 Quarter: ' + dealers[d].upper() + '-' + str(years[y]))
+
+            # AgGrid(df2, fit_columns_on_grid_load=True)
+            utils.download_csv(df2, '12 Months: ' + dealers[d].upper() + '-' + str(years[y]))
+
+            # replace 0 by blank ('')
+            df_table1['Q1'].replace(to_replace=0, value='', inplace=True)
+            df_table1['Q2'].replace(to_replace=0, value='', inplace=True)
+            df_table1['Q3'].replace(to_replace=0, value='', inplace=True)
+            df_table1['Q4'].replace(to_replace=0, value='', inplace=True)
+
+            cols = df_table1.columns
+
+            fig = go.Figure(data=[go.Table(
+                columnwidth=[18, 18],
+
+                header=dict(values=list(cols),
+                            fill_color=[color_hex(357)] + [color_hex(66)] * 4 + [color_hex(118)],
+                            line_color='white',
+                            font_color='white',
+                            font_size=14,
+                            height=28,
+                            align=['left', 'center']),
+                cells=dict(
+                    values=[df_table1[cols[0]], df_table1[cols[1]], df_table1[cols[2]], df_table1[cols[3]], df_table1[cols[4]], df_table1[cols[5]]],
+                    font_size=14,
+                    height=28,
+                    fill_color=[color_hex(304)] + [color_hex(12)] * 4 + ['lightblue'],
+                    line_color='white',
+                    align=['left', 'right']))
+               ])
+
+
+        # get dealers sales in USD
+        dealer_sales = df_dealer[df_dealer['Customer'] == dealers[d]].iloc[0][1]
+        dealer_sales = round(dealer_sales/1000, 0)
+
+        txt2 = str(d+1) + '. ' + dealers[d].upper()  + ' ($ ' + str(utils.format_num(dealer_sales)) + 'k)'
+        mygrid[row][col].markdown(
+            f'<p style="font-family: Book Antiqua; color: {color_hex(240)}; text-align:left; font-size: 14px ;border-radius:2%; '
+            f'line-height:0em; margin-top:0px"> {txt2} </p>', unsafe_allow_html=True)
+
+        fig.update_layout(width=700, height=len(df_table1) * 28 + 28, margin=dict(l=0, r=0, b=0, t=0))
+
+        mygrid[row][col].plotly_chart(fig, use_container_width=True)
+
+        if col < 3:
+            col += 1
+
+        else:
+            col = 0
+            row += 1
+
+    st.write(df_dealer)
+    utils.download_csv(df_dealer, 'Dealer List')

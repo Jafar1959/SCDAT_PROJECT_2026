@@ -5,7 +5,7 @@ import base64
 from statistics import mean
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 import glob
-
+import os
 import datetime
 from datetime import datetime   #, timedelta
 
@@ -59,7 +59,9 @@ def two_years_sales(datafile_location, suppliers):
     folder = datafile_location + "\Sales\Monthly_Sales\MONTHLY"
 
     # Read all CSV files matching your pattern
-    files = glob.glob(folder + "\*_Sales_*.csv")
+    # files = glob.glob(folder + "\*_Sales_*.csv")  # Windows only
+    files = glob.glob(os.path.join(Path(PureWindowsPath(folder + "\*_Sales_*.csv"))))   # Windows & Mac
+
     files.sort()
     # files = files[-25:-1]   # get 24 months from previous month
     files = files[-25:]   # get 25 months including current month

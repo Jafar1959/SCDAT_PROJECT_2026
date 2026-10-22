@@ -126,17 +126,26 @@ def get_header_color(change):
 
 def filter_dataframe(df, supplier, model):
 
-    if supplier != 'ALL':
+    # __________ Filter on Supplier __________
+    if supplier == 'ALL SINK':
+        # df = df[df["SUPPLIER"] == supplier]
+        df = df[~df['SKU'].str.startswith(('RVF', 'RVB6'))]
+
+    elif supplier != 'ALL':
         df = df[df["SUPPLIER"] == supplier]
 
+    # __________ Filter on Model __________
     if model.upper()[0:2] == 'RV':
         df = df.loc[lambda row: row['SKU'].str.startswith(model.upper())]
 
-    elif model.upper()[0:2] != 'RV' and model.upper() != 'ALL':
+    # __________ Filter on Color __________
+    elif model.upper()[0:2] != 'RV' and model.upper() != 'ALL' and supplier != 'ALL SINK':
         df = df.loc[lambda row: row['SKU'].str.endswith(model.upper())]
 
+    # __________ Sort and Re-index __________
     df.reset_index(drop=True, inplace=True)  # order index
     df.index = range(1, df.shape[0] + 1)
+
     return df
 
 def filter_custom_sku_list(datafile_location, df):
@@ -205,10 +214,12 @@ def display_product_chit(datafile_location):
 
     # Load and pre-filter data
     df_sale = get_two_year_sale(datafile_location, current_year, previous_year)
-    df_sale = df_sale[~df_sale['SKU'].str.startswith('RVA')]
+
+    df_sale = df_sale[~df_sale['SKU'].str.startswith(('RVA', 'RBX', 'RVP', 'RDM'))]
 
     # ===================== Sidebar Filters =====================
-    supplier_list = sorted(set(df_sale['SUPPLIER']).union({'ALL'}))
+    # supplier_list = sorted(set(df_sale['SUPPLIER']).union({'ALL'}))
+    supplier_list = sorted(set(df_sale['SUPPLIER']).union({'ALL', 'ALL SINK'}))
 
     checked = st.sidebar.checkbox("Custom SKU List", value=False)
 
@@ -222,6 +233,10 @@ def display_product_chit(datafile_location):
         model = st.sidebar.text_input("MODEL / COLOR", "ALL")
         df_filtered = filter_dataframe(df_sale, supplier, model)
 
+    # st.write(df_filtered)
+    # st.write(len(df_filtered))
+    # st.stop()
+
     # ===================== Sorting =====================
     df_filtered = df_filtered.sort_values(
         [str(current_year), 'SKU'],
@@ -234,7 +249,7 @@ def display_product_chit(datafile_location):
     total_rows = len(df_filtered)
 
     if total_rows > 50:
-        start = st.sidebar.number_input('START INDEX', min_value=1, max_value=501, step=50)
+        start = st.sidebar.number_input('START INDEX', min_value=1, max_value=550, step=50)
         end = start + 49
         df1 = df_filtered.iloc[start - 1:end]
     else:
@@ -331,7 +346,9 @@ def display_product_chit(datafile_location):
         utils.download_csv(df_filtered, 'Download All')
 
     # ===================== Summary =====================
-    ytd_sales_summary(df_filtered, current_year, previous_year, months_elapsed, supplier)
+    # st.write(df_filtered)
+    # ytd_sales_summary(df_filtered, current_year, previous_year, months_elapsed, supplier)
+    ytd_sales_summary(df_sale, current_year, previous_year, months_elapsed, supplier)
 
     return
 
@@ -341,23 +358,39 @@ def ytd_sales_summary(df, current_year, previous_year, month_elapsed, supplier):
     # Create monthly sales column (vectorized)
     df['MONTHLY'] = (df[str(current_year)] / month_elapsed).round(0)
 
-    # Split dataset into categories using vectorized string filters
-    df_sink = df[~df['SKU'].str.startswith(('RVB6', 'RVF', 'RDM'))]
+    df = df.sort_values(
+        [str(current_year), 'SKU'],
+        ascending=[False, True]
+    ).reset_index(drop=True)
 
-    # st.write(df_sink)
-    # st.stop()
+    # Split dataset into categories using vectorized string filters
+    df_sink = df[~df['SKU'].str.startswith(('RVB6', 'RVF', 'RVP', 'RDM'))]
+
+    df_sink.index = range(1, len(df_sink) + 1)
 
     df_tub = df[df['SKU'].str.startswith('RVB6')]
+
     df_faucet = df[df['SKU'].str.startswith('RVF')]
+
+    # st.write(df_faucet)
+    # st.stop()
 
     # ===================== Chunk Summary (Sink) =====================
     chunk_size = st.sidebar.number_input(
         'CHUNK SIZE', min_value=10, max_value=50, step=5, value=50
     )
 
-    total_rows = min(len(df_sink), 500) # 450
+    #st.write(len(df_sink))
+    #st.write(df_sink)
+
+    total_rows = min(len(df_sink), 600) # 450
 
     summary_rows = []  # collect rows → faster than concat
+    total_previous_sinks = 0
+    total_current_sinks = 0
+
+    keep_sale_highest = 0
+    keep_sale_lowest = 0
 
     for start in range(0, total_rows, chunk_size):
         end = min(total_rows, start + chunk_size)
@@ -372,6 +405,13 @@ def ytd_sales_summary(df, current_year, previous_year, month_elapsed, supplier):
         sale_highest = int(monthly_vals.iloc[0])
         sale_lowest = int(monthly_vals.iloc[-1])
 
+
+        if start == 0:
+            keep_sale_highest = sale_highest
+
+        else:
+            keep_sale_lowest = sale_lowest
+
         # Aggregate totals
         total_prev = df_chunk[str(previous_year)].sum()
         total_curr = df_chunk[str(current_year)].sum()
@@ -382,6 +422,20 @@ def ytd_sales_summary(df, current_year, previous_year, month_elapsed, supplier):
             str(previous_year): total_prev,
             str(current_year): total_curr
         })
+
+        total_previous_sinks = total_previous_sinks + total_prev
+        total_current_sinks = total_current_sinks + total_curr
+
+    # ___________ Sinks Total Row _______________________
+    summary_rows.append({
+        'S/N': "SINKS",
+        'Sales/Month': str(keep_sale_highest) + ' - ' + str(keep_sale_lowest),
+        str(previous_year): total_previous_sinks,
+        str(current_year): total_current_sinks
+    })
+
+    # st.write(summary_rows)
+    # st.stop()
 
     # ===================== Additional Categories =====================
     def add_category_row(df_cat, label):
@@ -411,6 +465,8 @@ def ytd_sales_summary(df, current_year, previous_year, month_elapsed, supplier):
 
     # ===================== Build Summary DataFrame =====================
     df_summary = pd.DataFrame(summary_rows)
+    # st.write(df_summary)
+    # st.stop()
 
     # ===================== Calculations =====================
     df_summary['Difference'] = (
@@ -442,6 +498,8 @@ def ytd_sales_summary(df, current_year, previous_year, month_elapsed, supplier):
         for v in df_summary['Difference']
     ]
 
+    #st.write(df_summary)
+    # st.stop()
     # ===================== Plotly Table =====================
     cols = df_summary.columns
 
@@ -458,9 +516,9 @@ def ytd_sales_summary(df, current_year, previous_year, month_elapsed, supplier):
         ),
         cells=dict(
             values=[df_summary[col] for col in cols[:6]],
-            font_size=20,
+            font_size=18,
             font=dict(color=[font_colors]),
-            height=40,
+            height=36,
             fill_color=[df_summary['color']],
             line_color='white',
             align=['center', 'center', 'right']
@@ -477,7 +535,7 @@ def ytd_sales_summary(df, current_year, previous_year, month_elapsed, supplier):
     )
 
     fig.update_layout(
-        height=len(df_summary) * 40 + 35,
+        height=len(df_summary) * 40 - 20,
         margin=dict(l=0, r=0, b=0, t=0)
     )
 
@@ -544,9 +602,9 @@ def display_supplier_wise_summary(df, current_year, previous_year, col2):
             cells=dict(
                 values=[df['SUPPLIER'], df[str(previous_year)], df[str(current_year)], df['Difference'], df['Percentage']],
                #format=[None, None, None, None, ".2f"],
-                font_size=14,
+                font_size=16,
                 font=dict(color=[font_colors]),
-                height=26.5,
+                height=29.7,
                 fill_color=[df.color],
                 line_color='white',
                 align=['left', 'right']))
@@ -561,7 +619,7 @@ def display_supplier_wise_summary(df, current_year, previous_year, col2):
             layer="above"
         )
 
-        fig.update_layout(height=len(df) * 26 + 46, margin=dict(l=0, r=0, b=0, t=0))
+        fig.update_layout(height=len(df) * 26 + 98, margin=dict(l=0, r=0, b=0, t=0))
 
         st.plotly_chart(fig, width='stretch')
 

@@ -686,6 +686,8 @@ def container_dashboard(datafile_location):
     df2 = df2.rename(columns={'QTY': 'In-Ocean Qty'})
     df2['In-Ocean Qty'] = df2['In-Ocean Qty'].fillna(0)
 
+    df2 = df2.sort_values(by='Supplier', ascending=True)
+
     # Calculate totals for all columns except the first ====================
     totals = df2.iloc[:, 1:].sum()
     total_row = pd.DataFrame([['Total'] + totals.tolist()], columns=df2.columns) # Create a new row with a label in the first column

@@ -704,10 +704,12 @@ def log_data_graph(file_path):
     # __________ Set Range Filter ___________
     range = st.sidebar.selectbox(
         "Log Graph | Select Range",
-        ['Last 30-days', 'Last 60-days', 'Last 180-days', 'Last 365-days']
+        ['Last 15-days', 'Last 30-days', 'Last 60-days', 'Last 180-days', 'Last 365-days'],
+        index=1
     )
 
     delta = {
+        'Last 15-days': 15,
         'Last 30-days': 30,
         'Last 60-days': 60,
         'Last 180-days': 180,
@@ -735,6 +737,41 @@ def log_data_graph(file_path):
 
     column_name = ", ".join(selected_columns)
 
+    # ___________ Get Current Inventory Values _________________
+    df_current_inventory_values = df[selected_columns]
+
+    result = ', '.join(
+        f'{col} ({value:,.0f})' if isinstance(value, (int, float))
+        else f'{col} ({value})'
+        for col, value in df_current_inventory_values.iloc[-1].items()
+    )
+
+    # ___________ Get Min and Max Values of y-axis ________________
+    if len(selected_columns) > 0:
+        max_values = df[selected_columns].max()
+        min_values = df[selected_columns].min()
+
+        title = column_name + " | " + range + " Inventory History | " + "Inventory Range: " + str(utils.format_num(min(min_values))) +\
+        " - " + str(utils.format_num(max(max_values))) + " | " + result
+    else:
+        st.error("Please Select Supplier / Category")
+        st.write("")
+        return
+
+
+
+
+    # result = ', '.join(
+    #     f'{label} ({pd.to_numeric(value, errors="coerce"):,.0f})'
+    #     if pd.notna(pd.to_numeric(value, errors="coerce"))
+    #     else f'{label} ({value})'
+    #     for label, value in zip(selected_columns.iloc[:, 0], selected_columns.iloc[:, 1])
+    # )
+
+    # st.write(df[selected_columns])
+    # # st.write(df_current_inventory_values)
+    # st.write(result)
+    # st.stop()
     # -----------------------------
     # Create Plotly graph
     # -----------------------------
@@ -754,7 +791,10 @@ def log_data_graph(file_path):
     # Format graph
     # -----------------------------
     fig.update_layout(
-        title=column_name + " | Inventory History | " + range,
+        # title=column_name + ' | ' + range + " Inventory History | " + 'Quantity Range: ' + str(utils.format_num(min(min_values))) +
+        #       ' - ' + str(utils.format_num(max(max_values))),
+        title=title,
+        title_font=dict(size=18, family="Book Antique", color=color_hex(10)),
         xaxis_title="Date",
         yaxis_title="Quantity",
         hovermode="x unified",
@@ -766,6 +806,13 @@ def log_data_graph(file_path):
     fig.update_xaxes(
         tickformat="%m/%d/%Y"
     )
+
+    # ____ set y-axis tick to minimum 1 ____
+    # fig.update_yaxes(
+    #     # tickmode='linear',
+    #     # dtick=[1, None],
+    #     # tickformat=".0f"
+    # )
 
     st.plotly_chart(
         fig,
