@@ -644,6 +644,12 @@ def log_inventory(datafile_location):
     df_lowes_acc = df[df['SKU'].isin(lowes_acc)]
     log_data['Lowes_Acc'] = df_lowes_acc['QTY'].sum()
 
+    # ____________ Add Home Depot Models _____________________________
+    homedepot_sink = ['RVM15231HT', 'RVM15633HT', 'RVM65237HT']  # <<<< Home Depot List
+
+    df_homedepot_sink = df[df['SKU'].isin(homedepot_sink)]
+    log_data['HomeDepot_Sink'] = df_homedepot_sink['QTY'].sum()
+
     # ____________ Add Incoming Sink, Tub & Faucet Qty________________
     df_incoming, *_ = data.container_df(datafile_location)
     df_incoming = df_incoming[['SKU', 'QTY']]
@@ -677,6 +683,9 @@ def log_inventory(datafile_location):
     log_data.insert(0, "DATE", today)
     log_data.insert(1, "DAY", day)
     log_data.insert(2, "TIME", current_time)
+
+    # st.write(log_data)
+    # st.stop()
 
     utils.log_data_in_file(datafile_location, log_data, 'Inventory\\DAILY INVENTORY LOG.xlsx')
 
