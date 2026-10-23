@@ -405,8 +405,13 @@ def wh_wise_inventory_df(datafile_location):
     df_refurb = df_wh.loc[lambda row: row['SKU'].str.endswith('-REFURB')]
 
     # ----------------------- Lowes Retail Models only ---------------------------------------------------
-    retail_models = ['RVA9001LM', 'RVH180051LM', 'RVH183001LM', 'RVH185841LM', 'RVH165301BL', 'RVG11080BK', 'RVG123061BK']
-    df_retail = df_wh[df_wh['SKU'].isin(retail_models)]
+    lowes_models = ['RVA9001LM', 'RVH180051LM', 'RVH183001LM', 'RVH185841LM', 'RVH165301BL', 'RVG11080BK', 'RVG123061BK']
+    df_lowes = df_wh[df_wh['SKU'].isin(lowes_models)]
+
+    # ----------------------- HomeDepot Retail Models only ---------------------------------------------------
+    homedepot_models = ['RVM15231HT', 'RVM15633HT', 'RVM65237HT']
+    df_homedepot = df_wh[df_wh['SKU'].isin(homedepot_models)]
+
 
     prefixes = (
         'RVA',  # all accessories
@@ -418,7 +423,6 @@ def wh_wise_inventory_df(datafile_location):
         'OPEN-BOX'  # openbox
         )
 
-    # df_sink = utils.exclude_sku_prefixes(df_wh, prefixes)   # get sinks only
 
     df_sink = df_wh[~df_wh["SKU"].str.startswith(prefixes, na=False)]       # get sinks only
     df_sink = df_sink.loc[lambda row: ~ row['SKU'].str.endswith('-REFURB')]     # remove refurb skus
@@ -442,8 +446,8 @@ def wh_wise_inventory_df(datafile_location):
     # location L-CONTAINER only  << ======================================================
     df_container = df_sink[df_sink['LOCATION'].str.startswith('L-CON')]
 
-    return df_wh, df_wh1, df_wh2, df_wh3, df_wh4, df_accessories, df_box, df_refurb, df_container, df_retail, retail_models, df_faucet, \
-        df_bathtub, df_faucet_parts
+    return df_wh, df_wh1, df_wh2, df_wh3, df_wh4, df_accessories, df_box, df_refurb, df_container, df_lowes, lowes_models, df_faucet, \
+        df_bathtub, df_faucet_parts, df_homedepot, homedepot_models
 
 
 def sc_summary_df_OLD(datafile_location, supplier, model):

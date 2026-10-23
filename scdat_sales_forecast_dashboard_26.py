@@ -275,11 +275,14 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
     df_box = values[6]
     df_refurb = values[7]
     df_l_container = values[8]
-    df_retail = values[9]
-    retail_models = values[10]
+    df_lowes = values[9]
+    lowes_models = values[10]
     df_faucet = values[11]
     df_bathtub = values[12]
     df_faucet_parts = values[13]
+    df_homedepot = values[14]
+    homedepot_models = values[15]
+
 
     # st.write(df_wh['QTY'].sum())
     total_wh1 = utils.format_num(df_wh1['QTY'].sum())
@@ -290,11 +293,11 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
     total_refurb = utils.format_num(df_refurb['QTY'].sum())
     total_wh3 = utils.format_num(df_wh3['QTY'].sum())
     total_l_container = utils.format_num(df_l_container['QTY'].sum())
-    total_lowes_model = utils.format_num(df_retail['QTY'].sum())
+    total_lowes_model = utils.format_num(df_lowes['QTY'].sum())
     total_faucets = utils.format_num(df_faucet['QTY'].sum())
     total_faucets_parts = utils.format_num(df_faucet_parts['QTY'].sum())
-
     total_bathtubs = utils.format_num(df_bathtub['QTY'].sum())
+    total_homedepot_model = utils.format_num(df_homedepot['QTY'].sum())
 
     df_all = pd.DataFrame({'WH1': [total_wh1],
                            'WH2': [total_wh2],
@@ -305,17 +308,13 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
                            'ACCESSORIES': [total_accessories],
                            'PACKING BOX': [total_box],
                            'LOWES MODELS': [total_lowes_model],
+                           'HD MODELS': [total_homedepot_model],
                            'FAUCETS': [total_faucets],
                            'FAUCET PARTS': [total_faucets_parts],
                            'BATHTUBS': [total_bathtubs],
 
                            })
     stock = round((df_wh1['QTY'].sum() + df_wh2['QTY'].sum() + df_wh3['QTY'].sum() + df_wh4['QTY'].sum())/forecast, 2)
-
-    # st.markdown(
-    #     f'<p style="font-family: Book Antiqua; color: {color_hex(118)}; text-align:left; font-size: 20px ;border-radius:1%;'
-    #     f' line-height:0em; margin-top:0px"> Warehouse Inventory Mix | Stock: {stock} month | {utils.get_todays_date()}</p>',
-    #     unsafe_allow_html=True)
 
     txt = " Warehouse Inventory Mix | Stock: " +  str(stock) + " month | " + utils.get_todays_date()
     utils.show_header(txt)
@@ -333,7 +332,7 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
         cells=dict(
 
             values=[df_all['WH1'], df_all['WH2'], df_all['WH3'], df_all['WH4'], df_all['L-CONTAINER'], df_all['REFURBISHED'],
-                    df_all['ACCESSORIES'], df_all['PACKING BOX'], df_all['LOWES MODELS'], df_all['FAUCETS'], df_all['FAUCET PARTS'],
+                    df_all['ACCESSORIES'], df_all['PACKING BOX'], df_all['LOWES MODELS'], df_all['HD MODELS'] , df_all['FAUCETS'], df_all['FAUCET PARTS'],
                     df_all['BATHTUBS']],
 
             font=dict(family="Arial", size=12, color='black'),
@@ -387,8 +386,12 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
     df_houston = df_houston.groupby('SUPPLIER')['QTY'].sum().to_frame().reset_index()
 
     # get Lowes Retail Models Quantity  << ======================================================================
-    df_retail = df_retail.groupby('SKU')['QTY'].sum().to_frame().reset_index()
-    df_retail = df_retail.rename(columns={'SKU': 'SUPPLIER'})
+    df_lowes = df_lowes.groupby('SKU')['QTY'].sum().to_frame().reset_index()
+    df_lowes = df_lowes.rename(columns={'SKU': 'SUPPLIER'})
+
+    # get Home Depot Retail Models Quantity  << ======================================================================
+    df_homedepot = df_homedepot.groupby('SKU')['QTY'].sum().to_frame().reset_index()
+    df_homedepot = df_homedepot.rename(columns={'SKU': 'SUPPLIER'})
 
     # get Faucet Quantity  << ======================================================================
     df_faucet = df_faucet.groupby('SUPPLIER')['QTY'].sum().to_frame().reset_index()
@@ -396,10 +399,10 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
     # get Bathtubs Quantity  << ======================================================================
     df_bathtub = df_bathtub.groupby('SUPPLIER')['QTY'].sum().to_frame().reset_index()
 
-    location = ['Austin WH', 'Houston WH', 'Amazon WH', 'Retail Models', 'Faucets', 'Bathtubs']
+    location = ['Austin WH', 'Houston WH', 'Amazon WH', 'Lowes Models', 'Home Depot Models', 'Faucets', 'Bathtubs']
 
     mygrid = utils.make_grid(2, 3)  # (row, col)
-    #mygrid = utils.make_grid(1, 4)  # (row, col)
+
     row = 0
     col = 0
 
@@ -416,13 +419,15 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
             df_pie = df_fba
             height = 326
 
-        elif location[i] == 'Retail Models':
-            df_pie = df_retail
-            height = 250
 
-            colors = [''] * len(retail_models)  # create array with 'blank' elements for 5 retail models
+        elif location[i] == 'Lowes Models':
+            mygrid = utils.make_grid(3, 4)
+            df_pie = df_lowes
+            height = 240
 
-            df_colors = pd.DataFrame({'SUPPLIER': retail_models, 'COLOR': colors})
+            colors = [''] * len(lowes_models)  # create array with 'blank' elements for 5 retail models
+
+            df_colors = pd.DataFrame({'SUPPLIER': lowes_models, 'COLOR': colors})
             df_colors.loc[df_colors['SUPPLIER'] == 'RVH180051LM', 'COLOR'] += color_hex(35),  # Speed
             df_colors.loc[df_colors['SUPPLIER'] == 'RVH183001LM', 'COLOR'] += color_hex(81),  # Speed
             df_colors.loc[df_colors['SUPPLIER'] == 'RVH185841LM', 'COLOR'] += color_hex(33),  # Speed
@@ -430,20 +435,31 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
             df_colors.loc[df_colors['SUPPLIER'] == 'RVG11080BK', 'COLOR'] += color_hex(97),  # Elleci
             df_colors.loc[df_colors['SUPPLIER'] == 'RVG123061BK', 'COLOR'] += color_hex(95),  # Elleci
 
+        elif location[i] == 'Home Depot Models':
+            df_pie = df_homedepot
+            height = 240
+
+            colors = [''] * len(homedepot_models)  # create array with 'blank' elements for 5 retail models
+
+            df_colors = pd.DataFrame({'SUPPLIER': homedepot_models, 'COLOR': colors})
+            df_colors.loc[df_colors['SUPPLIER'] == 'RVM15231HT', 'COLOR'] += color_hex(35),
+            df_colors.loc[df_colors['SUPPLIER'] == 'RVM15633HT', 'COLOR'] += color_hex(81),
+            df_colors.loc[df_colors['SUPPLIER'] == 'RVM65237HT', 'COLOR'] += color_hex(33),
+
         elif location[i] == 'Faucets':
             df_pie = df_faucet
-            height = 250
+            height = 240
 
             faucet_suppliers = df_pie['SUPPLIER'].to_list()
             colors = [''] * len(df_pie)  # create array with 'blank' elements for 2 suppliers
 
             df_colors = pd.DataFrame({'SUPPLIER': faucet_suppliers, 'COLOR': colors})
-            df_colors.loc[df_colors['SUPPLIER'] == 'CAE Sanitary', 'COLOR'] += color_hex(185),
+            df_colors.loc[df_colors['SUPPLIER'] == 'CAE Sanitary', 'COLOR'] += color_hex(111),
             df_colors.loc[df_colors['SUPPLIER'] == 'Huayi', 'COLOR'] += color_hex(27),
 
         elif location[i] == 'Bathtubs':
             df_pie = df_bathtub
-            height = 250
+            height = 240
 
             bathtub_suppliers = df_pie['SUPPLIER'].to_list()
             colors = [''] * len(df_pie)  # create array with 'blank' elements for 2 suppliers
@@ -451,7 +467,7 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
             df_colors = pd.DataFrame({'SUPPLIER': bathtub_suppliers, 'COLOR': colors})
 
             df_colors.loc[df_colors['SUPPLIER'] == 'Nicos', 'COLOR'] += color_hex(111),
-            df_colors.loc[df_colors['SUPPLIER'] == 'Wisdom', 'COLOR'] += color_hex(60),
+            df_colors.loc[df_colors['SUPPLIER'] == 'Wisdom', 'COLOR'] += color_hex(81),
 
         df_pie = pd.merge(df_pie, df_colors, on=['SUPPLIER'], how='left')
         df_pie['LEGEND'] = df_pie.apply(lambda x: str(x.iloc[0]) + ' (' + utils.format_num(str(x.iloc[1])) + ')', axis=1)
@@ -478,7 +494,8 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
                             font=dict(size=24, family='Book Antiqua', color=color_hex(119)),
                             showarrow=False)
 
-        # mygrid[row][col].write('')
+        # st.write(location[i])
+
         mygrid[row][col].markdown(
             f'<p style="font-family: Book Antiqua; color: {color_hex(50)}; text-align:left; font-size: 20px ;border-radius:1%;'
             f' line-height:0em; margin-top:8px"> {location[i]}<p/>', unsafe_allow_html=True)
@@ -491,14 +508,22 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
 
         fig1.update_layout(legend=dict(title_font_family="Book Antiqua", font=dict(size=12), orientation='v', x=0.95, y=0.5, yanchor='middle'))
 
-        mygrid[row][col].plotly_chart(fig1, width='stretch')
+        mygrid[row][col].plotly_chart(fig1, width='stretch')    # <<<< display pie
 
         col = col + 1
-        if col > 2:
+
+        if col > 2 and i < 5:
             row = row + 1
             col = 0
 
+        else:   # for Bathtubs
+            if col > 3:
+                row = row + 1
+                col = 0
+
+
     col1, col2 = st.columns([2.1, 0.01])
+
     with col1:
         st.plotly_chart(fig, use_container_width=True)
 
@@ -510,8 +535,8 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
         (df_wh4, 'Download WH4'),
         (df_fba, 'Download FBA'),
         (values[9], 'Download LOWES'),
+        (values[14], 'Download HD'),
         (values[11], 'Download FAUCETS'),
-        (values[12], 'Download BATHTUBS'),
     ]
 
     cols = st.columns(len(downloads))
@@ -521,6 +546,7 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
             utils.download_csv(df, label)
 
     downloads = [
+        (values[12], 'Download BATHTUBS'),
         (df_l_container, 'Download L-CONTAINER'),
         (df_accessories, 'Download PARTS'),
         (df_refurb, 'Download REFURBISHED'),
@@ -532,25 +558,6 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
     for col, (df, label) in zip(cols, downloads):
         with col:
             utils.download_csv(df, label)
-
-    # col1, col2, col3 = st.columns([1, 1, 1])
-    #
-    # with col1:
-    #     utils.download_csv(df_wh1, 'Download WH1')
-    # with col2:
-    #     utils.download_csv(df_wh2, 'Download WH2')
-    # with col3:
-    #     utils.download_csv(df_wh3, 'Download WH3')
-        # utils.download_csv(df_wh4, 'Download WH4')
-        # utils.download_csv(df_fba, 'Download FBA')
-        # utils.download_csv(values[9], 'Download LOWES')
-        # utils.download_csv(values[11], 'Download FAUCETS')
-        # utils.download_csv(values[12], 'Download BATHTUBS')
-        #
-        # utils.download_csv(df_l_container, 'Download L-CONTAINER')
-        # utils.download_csv(df_accessories, 'Download PARTS')
-        # utils.download_csv(df_refurb, 'Download REFURBISHED')
-        # utils.download_csv(df_box, 'Download PACKING BOX')
 
     # _______ Create Button and Log Data ____________________________
     st.markdown("""
