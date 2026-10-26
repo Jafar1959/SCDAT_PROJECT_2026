@@ -299,6 +299,7 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
     total_bathtubs = utils.format_num(df_bathtub['QTY'].sum())
     total_homedepot_model = utils.format_num(df_homedepot['QTY'].sum())
 
+
     df_all = pd.DataFrame({'WH1': [total_wh1],
                            'WH2': [total_wh2],
                            'WH3': [total_wh3],
@@ -582,15 +583,19 @@ def inventory_distribution_pie_summary(datafile_location, forecast_month, suppli
        """, unsafe_allow_html=True)
 
     # _________ Show Inventory Log Graph _____________________
+    total_austin = df_austin['QTY'].sum()
+    total_houston = df_houston['QTY'].sum()
+
     log_data_graph(datafile_location + 'Inventory\\DAILY INVENTORY LOG.xlsx')
 
+
     if st.sidebar.button("LOG INVENTORY DATA"):
-        log_inventory(datafile_location)
+        log_inventory(datafile_location, total_austin, total_houston)
 
     return
 
 
-def log_inventory(datafile_location):
+def log_inventory(datafile_location, total_austin, total_houston):
     df = data.inventory_df(datafile_location)[['SKU', 'SUPPLIER', 'Existing Qty']]
     df = df.rename(columns={'Existing Qty': 'QTY'})
 
@@ -678,6 +683,8 @@ def log_inventory(datafile_location):
     log_data['Incoming_Tub'] = df_incoming_tub['QTY'].sum()
     log_data['Incoming_Faucet'] = df_incoming_faucet['QTY'].sum()
     log_data['Incoming_Acc'] = df_incoming_acc['QTY'].sum()
+    log_data['Austin_WH'] = total_austin
+    log_data['Houston_WH'] = total_houston
 
     # st.write(log_data)
     # st.stop()
@@ -748,7 +755,7 @@ def log_data_graph(file_path):
     selected_columns = st.sidebar.multiselect(
         "Log Graph | Select Supplier",
         options=quantity_columns,
-        default=["Speed Vietnam", "Elleci"]
+        default=["Austin_WH", "Houston_WH"]
     )
 
     column_name = ", ".join(selected_columns)
@@ -774,20 +781,6 @@ def log_data_graph(file_path):
         st.write("")
         return
 
-
-
-
-    # result = ', '.join(
-    #     f'{label} ({pd.to_numeric(value, errors="coerce"):,.0f})'
-    #     if pd.notna(pd.to_numeric(value, errors="coerce"))
-    #     else f'{label} ({value})'
-    #     for label, value in zip(selected_columns.iloc[:, 0], selected_columns.iloc[:, 1])
-    # )
-
-    # st.write(df[selected_columns])
-    # # st.write(df_current_inventory_values)
-    # st.write(result)
-    # st.stop()
     # -----------------------------
     # Create Plotly graph
     # -----------------------------
@@ -799,7 +792,7 @@ def log_data_graph(file_path):
                 x=df["DATE"],
                 y=df[col],
                 mode="lines+markers",
-                name=col
+                name=col,
             )
         )
 
@@ -807,8 +800,6 @@ def log_data_graph(file_path):
     # Format graph
     # -----------------------------
     fig.update_layout(
-        # title=column_name + ' | ' + range + " Inventory History | " + 'Quantity Range: ' + str(utils.format_num(min(min_values))) +
-        #       ' - ' + str(utils.format_num(max(max_values))),
         title=title,
         title_font=dict(size=18, family="Book Antique", color=color_hex(10)),
         xaxis_title="Date",
@@ -823,12 +814,26 @@ def log_data_graph(file_path):
         tickformat="%m/%d/%Y"
     )
 
-    # ____ set y-axis tick to minimum 1 ____
-    # fig.update_yaxes(
-    #     # tickmode='linear',
-    #     # dtick=[1, None],
-    #     # tickformat=".0f"
-    # )
+    # ________________ Format Hover mode ______________
+    fig.update_traces(
+        hovertemplate=
+        '<b>Supplier:</b> %{fullData.name}<br>' +
+        '<b>Date:</b> %{x|%Y-%m-%d}<br>' +
+        '<b>Quantity:</b> %{y:,.0f}<extra></extra>',
+
+        hoverlabel=dict(
+            bgcolor=color_hex(1),
+            font=dict(color='black', size=14),
+            bordercolor=color_hex(254),
+        )
+    )
+
+    fig.update_layout(
+        template='plotly_white',
+        hovermode='closest'
+    )
+
+    # fig.update_traces(line=dict(width=3))
 
     st.plotly_chart(
         fig,
