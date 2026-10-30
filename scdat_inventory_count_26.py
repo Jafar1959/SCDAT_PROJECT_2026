@@ -49,6 +49,14 @@ def get_scan_data(datafile_location):
         .str.upper()
     )
 
+    # _____________ Clean SKU _______________
+    df["SKU"] = (
+        df["SKU"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+
     # ______________ Remove blank locations __________________
     df = df.loc[df["LOCATION"].ne("")]
 
@@ -368,7 +376,8 @@ def display_recount_analysis():     # SET WH, DIRECTORY & DATE <<<<<<<<<<<<<<<<<
     with col2:  # show (ZEN - COUNT2) <> 0 data ======================================
 
         df1['DIFFERENCE2'] = df1['ZEN QTY'] - df1['COUNT2']
-        df2 = df1[df1['DIFFERENCE2'] != 0]
+
+        df2 = df1[df1['DIFFERENCE2'] != 0][['LOCATION', 'SKU', 'ZEN QTY', 'COUNT1', 'COUNT2', 'DIFFERENCE2']]
 
         if len(df2) > 0:
 
